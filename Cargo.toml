@@ -1,0 +1,23 @@
+[package]
+name = "rsgit"
+version = "1.0.0"
+edition = "2021"
+description = "rsgit: A hyper-hyperfast web frontend for git repositories written in Rust."
+
+[dependencies]
+axum = "0.7"
+flate2 = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "process", "io-util"] }
+tokio-util = { version = "0.7", features = ["io"] }
+gix = { version = "0.66", default-features = false, features = ["max-performance-safe", "blob-diff"] }
+maud = "0.26"
+similar = "2"
+pulldown-cmark = { version = "0.12", default-features = false, features = ["html"] }
+syntect = { version = "5", default-features = false, features = ["parsing", "default-syntaxes", "default-themes", "html", "dump-load", "regex-fancy"] }
+
+[profile.release]
+strip = true
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
