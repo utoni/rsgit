@@ -71,6 +71,7 @@ async fn main() {
         .route("/:repo/commit/:id", get(commit))
         .route("/:repo/info/refs", get(GitClone::info_refs))
         .route("/:repo/git-upload-pack", post(GitClone::upload_pack))
+        .fallback(get(index))
         .with_state(state);
 
     let listener = match tokio::net::TcpListener::bind(&bind).await {
