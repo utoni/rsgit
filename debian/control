@@ -9,5 +9,5 @@ Homepage: https://github.com/utoni/rsgit
 
 Package: rsgit
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: git, ${shlibs:Depends}, ${misc:Depends}
 Description: A hyper-hyperfast web frontend for git repositories written in Rust.

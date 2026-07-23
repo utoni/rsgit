@@ -74,7 +74,7 @@ fn render_html(title: &str, repo: Option<&RepoCtx>, active: &str, body: Markup) 
                     a href="https://github.com/tokio-rs/axum" { "axum" }
                     " and "
                     "\n\t"
-                    a href="https://github.com/trishume/syntect" { "syntect" }
+                    a href="https://github.com/tree-sitter/tree-sitter" { "tree-sitter" }
                     "."
                     "\n"
                 }

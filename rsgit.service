@@ -13,6 +13,7 @@ DynamicUser=yes
 RootDirectory=/var/lib/rsgit/root
 MountAPIVFS=yes
 
+BindReadOnlyPaths=/usr/bin/git
 BindReadOnlyPaths=/usr/bin/rsgit
 BindReadOnlyPaths=/srv/git
 BindReadOnlyPaths=/lib64/ld-linux-x86-64.so.2

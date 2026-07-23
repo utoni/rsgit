@@ -28,6 +28,7 @@ use views::RepoCtx;
 struct AppState {
     root: Arc<PathBuf>,
     hl: Arc<Highlighter>,
+    clone_limit: Arc<tokio::sync::Semaphore>,
 }
 
 fn now_unix() -> i64 {
@@ -37,8 +38,43 @@ fn now_unix() -> i64 {
         .unwrap_or(0)
 }
 
-#[tokio::main]
-async fn main() {
+#[cfg(all(not(feature = "jemalloc"), feature = "heap-analyse"))]
+#[global_allocator]
+static ALLOC: dhat::Alloc = dhat::Alloc;
+#[cfg(all(feature = "jemalloc", not(feature = "heap-analyse")))]
+#[global_allocator]
+static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+#[allow(non_upper_case_globals)]
+#[export_name = "_rjem_malloc_conf"]
+pub static malloc_conf: &[u8] =
+    b"background_thread:true,dirty_decay_ms:1000,muzzy_decay_ms:1000,narenas:2\0";
+
+async fn shutdown_signal() {
+    tokio::signal::ctrl_c()
+        .await
+        .expect("failed to install Ctrl-C handler");
+}
+
+fn main() {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .max_blocking_threads(4)
+        .thread_stack_size(1024 * 1024)
+        .enable_all()
+        .build()
+        .expect("failed to build Tokio runtime");
+
+    rt.block_on(async_main());
+}
+
+async fn async_main() {
+    #[cfg(all(not(feature = "jemalloc"), feature = "heap-analyse"))]
+    let profiler = dhat::Profiler::new_heap();
+    #[cfg(all(not(feature = "jemalloc"), feature = "heap-analyse"))]
+    println!(
+        "Heap profiler active: view results on https://nnethercote.github.io/dh_view/dh_view.html"
+    );
+
     let mut args = std::env::args().skip(1);
     let root = args
         .next()
@@ -57,21 +93,22 @@ async fn main() {
     let state = AppState {
         root: Arc::new(root.clone()),
         hl: Arc::new(Highlighter::new()),
+        clone_limit: Arc::new(tokio::sync::Semaphore::new(8)),
     };
 
     let app = Router::new()
         .route("/", get(index))
-        .route("/:repo", get(summary))
-        .route("/:repo/log", get(log))
-        .route("/:repo/refs", get(refs))
-        .route("/:repo/tree", get(tree_root))
-        .route("/:repo/tree/", get(tree_root))
-        .route("/:repo/tree/*path", get(tree_path))
-        .route("/:repo/blob/*path", get(blob))
-        .route("/:repo/commit/:id", get(commit))
-        .route("/:repo/info/refs", get(GitClone::info_refs))
-        .route("/:repo/git-upload-pack", post(GitClone::upload_pack))
-        .fallback(get(index))
+        .route("/{repo}", get(summary))
+        .route("/{repo}/log", get(log))
+        .route("/{repo}/refs", get(refs))
+        .route("/{repo}/tree", get(tree_root))
+        .route("/{repo}/tree/", get(tree_root))
+        .route("/{repo}/tree/{*path}", get(tree_path))
+        .route("/{repo}/blob/{*path}", get(blob))
+        .route("/{repo}/commit/{id}", get(commit))
+        .route("/{repo}/info/refs", get(GitClone::info_refs))
+        .route("/{repo}/git-upload-pack", post(GitClone::upload_pack))
+        .fallback(not_found)
         .with_state(state);
 
     let listener = match tokio::net::TcpListener::bind(&bind).await {
@@ -85,7 +122,13 @@ async fn main() {
         "Listening on http://{bind} (git repository root: {})",
         root.display()
     );
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .unwrap();
+
+    #[cfg(all(not(feature = "jemalloc"), feature = "heap-analyse"))]
+    drop(profiler); // erzwingt das Schreiben vor exit
 }
 
 fn page(m: maud::Markup) -> Response {
@@ -98,6 +141,13 @@ fn fail(code: StatusCode, msg: &str) -> Response {
         Html(views::error_page(code.as_u16(), msg).into_string()),
     )
         .into_response()
+}
+
+async fn not_found() -> Response {
+    fail(
+        StatusCode::NOT_FOUND,
+        "The page you requested does not exist.",
+    )
 }
 
 fn map_err(e: GitError) -> Response {

@@ -97,6 +97,15 @@ table.src td.cl{padding:0 14px;white-space:pre;width:100%}
 table.src tr:target td{background:#2a2410}
 table.src tr:target td.ln{background:#39310f}
 
+/* --- Tree Sitter Syntax highlighting --- */
+.tsh-kw{color:#c9784e}    .tsh-fn{color:#7fb0ee}
+.tsh-type{color:#e6c07b}  .tsh-str{color:#82d097}
+.tsh-num{color:#d19a66}   .tsh-comment{color:#6c675f;font-style:italic}
+.tsh-const{color:#d19a66} .tsh-var{color:#e8e5df}
+.tsh-prop{color:#7fb0ee}  .tsh-op,.tsh-punct{color:#9d968b}
+.tsh-attr{color:#b295e6}  .tsh-tag{color:#e78d8d}
+.tsh-label{color:#b295e6}
+
 /* --- Diff --- */
 .filediff{border:1px solid var(--rule);border-radius:6px;margin:14px 0;overflow:hidden}
 .filediff .fh{background:var(--panel);padding:8px 12px;font-size:12px;

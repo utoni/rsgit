@@ -1,3 +1,9 @@
+rsgit (1.1.0) stable; urgency=medium
+
+  * Update packaging.
+
+ -- Toni Uhlig <toni@impl.cc>  Tue, 21 Jul 2026 07:19:25 +0200
+
 rsgit (1.0.0) unstable; urgency=medium
 
   * Initial release.

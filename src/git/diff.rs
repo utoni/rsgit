@@ -75,18 +75,28 @@ pub fn commit_diff(
     changes.for_each_to_obtain_tree(
         &new_tree,
         |change| -> std::result::Result<gix::object::tree::diff::Action, std::convert::Infallible> {
-            use gix::object::tree::diff::change::Event::*;
-            let loc = change.location.to_str_lossy().to_string();
-            match change.event {
-                Addition { id, entry_mode } if entry_mode.is_blob() => raws.push(Raw {
-                    path: loc,
+            use gix::object::tree::diff::Change::*;
+            let loc = change.location().to_str_lossy().to_string();
+            match change {
+                Addition {
+                    location: loc,
+                    entry_mode,
+                    id,
+                    ..
+                } if entry_mode.is_blob() => raws.push(Raw {
+                    path: loc.to_str_lossy().to_string(),
                     old_path: None,
                     kind: ChangeKind::Added,
                     old_id: None,
                     new_id: Some(id.detach()),
                 }),
-                Deletion { id, entry_mode } if entry_mode.is_blob() => raws.push(Raw {
-                    path: loc,
+                Deletion {
+                    location: loc,
+                    entry_mode,
+                    id,
+                    ..
+                } if entry_mode.is_blob() => raws.push(Raw {
+                    path: loc.to_str_lossy().to_string(),
                     old_path: None,
                     kind: ChangeKind::Deleted,
                     old_id: Some(id.detach()),
@@ -118,7 +128,7 @@ pub fn commit_diff(
                 }),
                 _ => {}
             }
-            Ok(gix::object::tree::diff::Action::Continue)
+            Ok(gix::object::tree::diff::Action::Continue(()))
         },
     )?;
 

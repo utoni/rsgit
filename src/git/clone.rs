@@ -7,35 +7,40 @@ use axum::{
 };
 use std::path::{Path as FsPath, PathBuf};
 use std::process::Stdio;
+use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use tokio_util::io::ReaderStream;
+
+const INFO_REFS_TIMEOUT: Duration = Duration::from_secs(30);
+const MAX_REQUEST_BYTES: usize = 50 * 1024 * 1024;
 
 pub async fn info_refs(
     State(st): State<AppState>,
     Path(repo): Path<String>,
     RawQuery(q): RawQuery,
 ) -> Response {
-    if query_service(q.as_deref()) != Some("git-upload-pack".to_string()) {
+    if query_service(q.as_deref()).as_deref() != Some("git-upload-pack") {
         return (StatusCode::FORBIDDEN, "only git-upload-pack is supported").into_response();
     }
     let Some(dir) = repo_dir(st.root.as_path(), &repo) else {
         return StatusCode::NOT_FOUND.into_response();
     };
 
-    let out = Command::new("git")
+    let fut = Command::new("/usr/bin/git")
+        .kill_on_drop(true)
         .args(["upload-pack", "--stateless-rpc", "--advertise-refs"])
         .arg(&dir)
-        .output()
-        .await;
-    let refs = match out {
-        Ok(o) if o.status.success() => o.stdout,
+        .output();
+
+    let out = match tokio::time::timeout(INFO_REFS_TIMEOUT, fut).await {
+        Ok(Ok(o)) if o.status.success() => o,
         _ => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
 
     let mut body = pkt_line("# service=git-upload-pack\n");
     body.extend_from_slice(b"0000");
-    body.extend_from_slice(&refs);
+    body.extend_from_slice(&out.stdout);
 
     (
         [
@@ -60,7 +65,12 @@ pub async fn upload_pack(
         return StatusCode::NOT_FOUND.into_response();
     };
 
-    let raw = match axum::body::to_bytes(body, 50 * 1024 * 1024).await {
+    let permit = match st.clone_limit.clone().try_acquire_owned() {
+        Ok(p) => p,
+        Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
+    };
+
+    let raw = match axum::body::to_bytes(body, MAX_REQUEST_BYTES).await {
         Ok(b) => b,
         Err(_) => return StatusCode::BAD_REQUEST.into_response(),
     };
@@ -77,7 +87,8 @@ pub async fn upload_pack(
         raw.to_vec()
     };
 
-    let mut child = match Command::new("git")
+    let mut child = match Command::new("/usr/bin/git")
+        .kill_on_drop(true)
         .args(["upload-pack", "--stateless-rpc"])
         .arg(&dir)
         .stdin(Stdio::piped())
@@ -89,17 +100,16 @@ pub async fn upload_pack(
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
 
-    if let Some(mut stdin) = child.stdin.take() {
-        if stdin.write_all(&input).await.is_err() {
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
-    }
-
-    let Some(stdout) = child.stdout.take() else {
+    let (Some(mut stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) else {
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     };
 
     tokio::spawn(async move {
+        let _ = stdin.write_all(&input).await;
+    });
+
+    tokio::spawn(async move {
+        let _permit = permit;
         let _ = child.wait().await;
     });
 

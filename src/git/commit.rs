@@ -43,7 +43,7 @@ pub fn resolve_commit(repo: &gix::Repository, spec: Option<&str>) -> Result<gix:
                 format!("refs/tags/{s}"),
             ] {
                 if let Ok(mut r) = repo.find_reference(name.as_str()) {
-                    if let Ok(id) = r.peel_to_id_in_place() {
+                    if let Ok(id) = r.peel_to_id() {
                         return Ok(id.detach());
                     }
                 }

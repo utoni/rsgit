@@ -25,7 +25,7 @@ pub fn refs(repo: &gix::Repository, offset: usize, limit: usize) -> Result<Refs>
     for r in platform.all()? {
         let mut r = r.map_err(|e| Error::Git(e.to_string()))?;
         let full = r.name().as_bstr().to_str_lossy().to_string();
-        let target_id = match r.peel_to_id_in_place() {
+        let target_id = match r.peel_to_id() {
             Ok(id) => id.detach(),
             Err(_) => continue,
         };

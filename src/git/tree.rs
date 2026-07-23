@@ -30,10 +30,7 @@ pub fn path_content(repo: &gix::Repository, spec: Option<&str>, path: &str) -> R
     let subtree = if path.is_empty() {
         tree
     } else {
-        let mut buf = Vec::new();
-        let entry = tree
-            .lookup_entry_by_path(path, &mut buf)?
-            .ok_or(Error::NotFound)?;
+        let entry = tree.lookup_entry_by_path(path)?.ok_or(Error::NotFound)?;
         let obj = entry.object()?;
         match obj.kind {
             gix::object::Kind::Blob => {
