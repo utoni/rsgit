@@ -1,90 +1,130 @@
 use crate::{git::repository::valid_repo_name, AppState};
-use axum::{
-    body::Body,
-    extract::{Path, RawQuery, State},
-    http::{header, HeaderMap, StatusCode},
-    response::{IntoResponse, Response},
-};
+use futures_lite::{AsyncReadExt, AsyncWriteExt, FutureExt};
+use http_types::{Body, Request, Response, StatusCode};
+use smol::process::Command;
 use std::path::{Path as FsPath, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
-use tokio::io::AsyncWriteExt;
-use tokio::process::Command;
-use tokio_util::io::ReaderStream;
 
 const INFO_REFS_TIMEOUT: Duration = Duration::from_secs(30);
-const MAX_REQUEST_BYTES: usize = 50 * 1024 * 1024;
+const MAX_REQUEST_BYTES: usize = 2 * 1024 * 1024;
 
-pub async fn info_refs(
-    State(st): State<AppState>,
-    Path(repo): Path<String>,
-    RawQuery(q): RawQuery,
-) -> Response {
-    if query_service(q.as_deref()).as_deref() != Some("git-upload-pack") {
-        return (StatusCode::FORBIDDEN, "only git-upload-pack is supported").into_response();
+fn status_resp(code: StatusCode, msg: &str) -> Response {
+    let mut res = Response::new(code);
+    if !msg.is_empty() {
+        res.set_body(msg.to_string());
     }
-    let Some(dir) = repo_dir(st.root.as_path(), &repo) else {
-        return StatusCode::NOT_FOUND.into_response();
+    res
+}
+
+async fn with_timeout<F, T>(dur: Duration, fut: F) -> Option<T>
+where
+    F: std::future::Future<Output = T>,
+{
+    let work = async move { Some(fut.await) };
+    let timer = async move {
+        smol::Timer::after(dur).await;
+        None
+    };
+    work.or(timer).await
+}
+
+pub async fn info_refs(st: &AppState, repo: &str, query: Option<&str>) -> Response {
+    if query_service(query).as_deref() != Some("git-upload-pack") {
+        return status_resp(StatusCode::Forbidden, "Only git-upload-pack is supported");
+    }
+    let Some(dir) = repo_dir(st.root.as_path(), repo) else {
+        return status_resp(StatusCode::NotFound, "Repository not found");
     };
 
-    let fut = Command::new("/usr/bin/git")
+    let mut child = match Command::new("/usr/bin/git")
         .kill_on_drop(true)
         .args(["upload-pack", "--stateless-rpc", "--advertise-refs"])
         .arg(&dir)
-        .output();
-
-    let out = match tokio::time::timeout(INFO_REFS_TIMEOUT, fut).await {
-        Ok(Ok(o)) if o.status.success() => o,
-        _ => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Failed to spawn git: {e}");
+            return status_resp(StatusCode::InternalServerError, "");
+        }
     };
+
+    let Some(mut stdout) = child.stdout.take() else {
+        return status_resp(StatusCode::InternalServerError, "");
+    };
+    let mut buf = Vec::new();
+    let read = async { stdout.read_to_end(&mut buf).await };
+    match with_timeout(INFO_REFS_TIMEOUT, read).await {
+        Some(Ok(_)) => {}
+        Some(Err(e)) => {
+            eprintln!("info/refs read error: {e}");
+            let _ = child.kill();
+            return status_resp(StatusCode::InternalServerError, "");
+        }
+        None => {
+            eprintln!("info/refs timeout");
+            let _ = child.kill();
+            return status_resp(StatusCode::InternalServerError, "");
+        }
+    }
+    match child.status().await {
+        Ok(s) if s.success() => {}
+        _ => return status_resp(StatusCode::InternalServerError, ""),
+    }
 
     let mut body = pkt_line("# service=git-upload-pack\n");
     body.extend_from_slice(b"0000");
-    body.extend_from_slice(&out.stdout);
+    body.extend_from_slice(&buf);
 
-    (
-        [
-            (
-                header::CONTENT_TYPE,
-                "application/x-git-upload-pack-advertisement",
-            ),
-            (header::CACHE_CONTROL, "no-cache"),
-        ],
-        body,
-    )
-        .into_response()
+    let mut res = Response::new(StatusCode::Ok);
+    res.insert_header(
+        "content-type",
+        "application/x-git-upload-pack-advertisement",
+    );
+    res.insert_header("cache-control", "no-cache");
+    res.set_body(body);
+    res
 }
 
-pub async fn upload_pack(
-    State(st): State<AppState>,
-    Path(repo): Path<String>,
-    headers: HeaderMap,
-    body: Body,
-) -> Response {
-    let Some(dir) = repo_dir(st.root.as_path(), &repo) else {
-        return StatusCode::NOT_FOUND.into_response();
+pub async fn upload_pack(st: &AppState, repo: &str, mut req: Request) -> Response {
+    let Some(dir) = repo_dir(st.root.as_path(), repo) else {
+        return status_resp(StatusCode::NotFound, "Repository not found");
     };
 
-    let permit = match st.clone_limit.clone().try_acquire_owned() {
-        Ok(p) => p,
-        Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
+    let permit = match st.clone_limit.try_acquire_arc() {
+        Some(p) => p,
+        None => return status_resp(StatusCode::ServiceUnavailable, "Too many clients to serve"),
     };
 
-    let raw = match axum::body::to_bytes(body, MAX_REQUEST_BYTES).await {
-        Ok(b) => b,
-        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
-    };
-    let gzipped = headers
-        .get(header::CONTENT_ENCODING)
-        .map(|v| v.as_bytes() == b"gzip")
+    let gzipped = req
+        .header("content-encoding")
+        .map(|v| v.as_str() == "gzip")
         .unwrap_or(false);
+
+    let body = req.take_body();
+    let mut raw = Vec::new();
+    if body
+        .take(MAX_REQUEST_BYTES as u64 + 1)
+        .read_to_end(&mut raw)
+        .await
+        .is_err()
+    {
+        return status_resp(StatusCode::BadRequest, "Read error");
+    }
+    if raw.len() > MAX_REQUEST_BYTES {
+        return status_resp(StatusCode::BadRequest, "Allowed request size exceeded");
+    }
+
     let input = if gzipped {
         match gunzip(&raw) {
             Ok(d) => d,
-            Err(_) => return StatusCode::BAD_REQUEST.into_response(),
+            Err(_) => return status_resp(StatusCode::BadRequest, ""),
         }
     } else {
-        raw.to_vec()
+        raw
     };
 
     let mut child = match Command::new("/usr/bin/git")
@@ -97,31 +137,34 @@ pub async fn upload_pack(
         .spawn()
     {
         Ok(c) => c,
-        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        Err(_) => {
+            eprintln!("Failed to spawn git");
+            return status_resp(StatusCode::InternalServerError, "");
+        }
     };
 
     let (Some(mut stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) else {
-        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        eprintln!("Could not acquire stdin and stdout from spawned git child");
+        return status_resp(StatusCode::InternalServerError, "");
     };
 
-    tokio::spawn(async move {
+    smol::spawn(async move {
         let _ = stdin.write_all(&input).await;
-    });
+    })
+    .detach();
 
-    tokio::spawn(async move {
+    smol::spawn(async move {
         let _permit = permit;
-        let _ = child.wait().await;
-    });
+        let _ = child.status().await;
+    })
+    .detach();
 
-    let stream = ReaderStream::new(stdout);
-    (
-        [
-            (header::CONTENT_TYPE, "application/x-git-upload-pack-result"),
-            (header::CACHE_CONTROL, "no-cache"),
-        ],
-        Body::from_stream(stream),
-    )
-        .into_response()
+    let reader = futures_lite::io::BufReader::new(stdout);
+    let mut res = Response::new(StatusCode::Ok);
+    res.insert_header("content-type", "application/x-git-upload-pack-result");
+    res.insert_header("cache-control", "no-cache");
+    res.set_body(Body::from_reader(reader, None));
+    res
 }
 
 fn pkt_line(s: &str) -> Vec<u8> {

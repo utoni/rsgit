@@ -3,14 +3,12 @@ mod highlight;
 mod util;
 mod views;
 
-use axum::{
-    extract::{Path, RawQuery, State},
-    http::StatusCode,
-    response::{Html, IntoResponse, Redirect, Response},
-    routing::get,
-    routing::post,
-    Router,
-};
+use async_lock::Semaphore;
+use futures_lite::{FutureExt, StreamExt};
+use http_types::{mime, Method, Request, Response, StatusCode};
+use std::path::PathBuf;
+use std::sync::Arc;
+
 use git::{
     clone as GitClone, commit,
     diff::commit_diff,
@@ -20,15 +18,13 @@ use git::{
     tree::{find_readme, path_content, PathContent, TreeItem},
 };
 use highlight::Highlighter;
-use std::path::PathBuf;
-use std::sync::Arc;
 use views::RepoCtx;
 
 #[derive(Clone)]
-struct AppState {
-    root: Arc<PathBuf>,
-    hl: Arc<Highlighter>,
-    clone_limit: Arc<tokio::sync::Semaphore>,
+pub struct AppState {
+    pub root: Arc<PathBuf>,
+    pub hl: Arc<Highlighter>,
+    pub clone_limit: Arc<Semaphore>,
 }
 
 fn now_unix() -> i64 {
@@ -41,33 +37,22 @@ fn now_unix() -> i64 {
 #[cfg(all(not(feature = "jemalloc"), feature = "heap-analyse"))]
 #[global_allocator]
 static ALLOC: dhat::Alloc = dhat::Alloc;
+
 #[cfg(all(feature = "jemalloc", not(feature = "heap-analyse")))]
 #[global_allocator]
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
+#[cfg(all(feature = "jemalloc", not(feature = "heap-analyse")))]
 #[allow(non_upper_case_globals)]
 #[export_name = "_rjem_malloc_conf"]
 pub static malloc_conf: &[u8] =
     b"background_thread:true,dirty_decay_ms:1000,muzzy_decay_ms:1000,narenas:2\0";
 
-async fn shutdown_signal() {
-    tokio::signal::ctrl_c()
-        .await
-        .expect("failed to install Ctrl-C handler");
+fn main() -> std::io::Result<()> {
+    smol::block_on(async_main())
 }
 
-fn main() {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(2)
-        .max_blocking_threads(4)
-        .thread_stack_size(1024 * 1024)
-        .enable_all()
-        .build()
-        .expect("failed to build Tokio runtime");
-
-    rt.block_on(async_main());
-}
-
-async fn async_main() {
+async fn async_main() -> std::io::Result<()> {
     #[cfg(all(not(feature = "jemalloc"), feature = "heap-analyse"))]
     let profiler = dhat::Profiler::new_heap();
     #[cfg(all(not(feature = "jemalloc"), feature = "heap-analyse"))]
@@ -93,25 +78,10 @@ async fn async_main() {
     let state = AppState {
         root: Arc::new(root.clone()),
         hl: Arc::new(Highlighter::new()),
-        clone_limit: Arc::new(tokio::sync::Semaphore::new(8)),
+        clone_limit: Arc::new(Semaphore::new(8)),
     };
 
-    let app = Router::new()
-        .route("/", get(index))
-        .route("/{repo}", get(summary))
-        .route("/{repo}/log", get(log))
-        .route("/{repo}/refs", get(refs))
-        .route("/{repo}/tree", get(tree_root))
-        .route("/{repo}/tree/", get(tree_root))
-        .route("/{repo}/tree/{*path}", get(tree_path))
-        .route("/{repo}/blob/{*path}", get(blob))
-        .route("/{repo}/commit/{id}", get(commit))
-        .route("/{repo}/info/refs", get(GitClone::info_refs))
-        .route("/{repo}/git-upload-pack", post(GitClone::upload_pack))
-        .fallback(not_found)
-        .with_state(state);
-
-    let listener = match tokio::net::TcpListener::bind(&bind).await {
+    let listener = match smol::net::TcpListener::bind(&bind).await {
         Ok(l) => l,
         Err(e) => {
             eprintln!("Cannot bind to {bind}: {e}");
@@ -122,39 +92,108 @@ async fn async_main() {
         "Listening on http://{bind} (git repository root: {})",
         root.display()
     );
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .unwrap();
+
+    let serve = async {
+        loop {
+            let (stream, _) = listener.accept().await?;
+            let state = state.clone();
+            smol::spawn(handle_conn(stream, state)).detach();
+        }
+        #[allow(unreachable_code)]
+        Ok::<(), std::io::Error>(())
+    };
+
+    let shutdown = async {
+        let mut signals = async_signal::Signals::new([async_signal::Signal::Int])?;
+        signals.next().await;
+        eprintln!("shutting down");
+        Ok::<(), std::io::Error>(())
+    };
+
+    let result = serve.or(shutdown).await;
 
     #[cfg(all(not(feature = "jemalloc"), feature = "heap-analyse"))]
-    drop(profiler); // erzwingt das Schreiben vor exit
+    drop(profiler);
+
+    result
+}
+
+async fn handle_conn(stream: smol::net::TcpStream, state: AppState) {
+    let _ = async_h1::accept(stream, move |req| {
+        let state = state.clone();
+        async move { Ok(route(state, req).await) }
+    })
+    .await;
+}
+
+async fn route(st: AppState, req: Request) -> Response {
+    let method = req.method();
+    let query = req.url().query().map(str::to_string);
+
+    let segs: Vec<String> = req
+        .url()
+        .path()
+        .split('/')
+        .filter(|s| !s.is_empty())
+        .map(|s| {
+            percent_encoding::percent_decode_str(s)
+                .decode_utf8_lossy()
+                .into_owned()
+        })
+        .collect();
+    let s: Vec<&str> = segs.iter().map(String::as_str).collect();
+
+    match s.as_slice() {
+        [] => index(&st).await,
+        [repo, "info", "refs"] if method == Method::Get => {
+            GitClone::info_refs(&st, repo, query.as_deref()).await
+        }
+        [repo, "git-upload-pack"] if method == Method::Post => {
+            GitClone::upload_pack(&st, repo, req).await
+        }
+        [repo] => summary(&st, repo).await,
+        [repo, "log"] => log(&st, repo, query.as_deref()).await,
+        [repo, "refs"] => refs(&st, repo, query.as_deref()).await,
+        [repo, "tree"] => tree(&st, repo, "").await,
+        [repo, "tree", rest @ ..] => tree(&st, repo, &rest.join("/")).await,
+        [repo, "blob", rest @ ..] => blob(&st, repo, &rest.join("/")).await,
+        [repo, "commit", id] => commit_view(&st, repo, id).await,
+        _ => not_found(),
+    }
 }
 
 fn page(m: maud::Markup) -> Response {
-    Html(m.into_string()).into_response()
+    let mut res = Response::new(StatusCode::Ok);
+    res.set_content_type(mime::HTML);
+    res.set_body(m.into_string());
+    res
 }
 
 fn fail(code: StatusCode, msg: &str) -> Response {
-    (
-        code,
-        Html(views::error_page(code.as_u16(), msg).into_string()),
-    )
-        .into_response()
+    let mut res = Response::new(code);
+    res.set_content_type(mime::HTML);
+    res.set_body(views::error_page(u16::from(code), msg).into_string());
+    res
 }
 
-async fn not_found() -> Response {
+fn redirect(to: &str) -> Response {
+    let mut res = Response::new(StatusCode::SeeOther);
+    res.insert_header("location", to);
+    res
+}
+
+fn not_found() -> Response {
     fail(
-        StatusCode::NOT_FOUND,
+        StatusCode::NotFound,
         "The page you requested does not exist.",
     )
 }
 
 fn map_err(e: GitError) -> Response {
     match e {
-        GitError::NotFound => fail(StatusCode::NOT_FOUND, "Not found."),
-        GitError::Empty => fail(StatusCode::OK, "This repository has no commits yet."),
-        GitError::Git(s) => fail(StatusCode::INTERNAL_SERVER_ERROR, &s),
+        GitError::NotFound => fail(StatusCode::NotFound, "Not found."),
+        GitError::Empty => fail(StatusCode::Ok, "This repository has no commits yet."),
+        GitError::Git(s) => fail(StatusCode::InternalServerError, &s),
     }
 }
 
@@ -185,19 +224,19 @@ fn render_readme(repo: &gix::Repository, items: &[TreeItem]) -> Option<String> {
     }
 }
 
-async fn index(State(st): State<AppState>) -> Response {
+async fn index(st: &AppState) -> Response {
     let repos = GitDiscover(&st.root);
     page(views::index(&repos, now_unix()))
 }
 
-async fn summary(State(st): State<AppState>, Path(repo): Path<String>) -> Response {
-    let r = match GitOpen(&st.root, &repo) {
+async fn summary(st: &AppState, repo: &str) -> Response {
+    let r = match GitOpen(&st.root, repo) {
         Ok(r) => r,
         Err(e) => return map_err(e),
     };
     let desc = read_desc(&r);
     let ctx = RepoCtx {
-        name: &repo,
+        name: repo,
         description: &desc,
     };
 
@@ -221,23 +260,19 @@ async fn summary(State(st): State<AppState>, Path(repo): Path<String>) -> Respon
     ))
 }
 
-async fn log(
-    State(st): State<AppState>,
-    Path(repo): Path<String>,
-    RawQuery(q): RawQuery,
-) -> Response {
-    let r = match GitOpen(&st.root, &repo) {
+async fn log(st: &AppState, repo: &str, query: Option<&str>) -> Response {
+    let r = match GitOpen(&st.root, repo) {
         Ok(r) => r,
         Err(e) => return map_err(e),
     };
     let desc = read_desc(&r);
     let ctx = RepoCtx {
-        name: &repo,
+        name: repo,
         description: &desc,
     };
 
     const PAGE: usize = 50;
-    let offset = parse_offset(q.as_deref());
+    let offset = parse_offset(query);
     let mut commits = match commit::log(&r, None, offset, PAGE + 1) {
         Ok(c) => c,
         Err(e) => return map_err(e),
@@ -255,23 +290,19 @@ async fn log(
     ))
 }
 
-async fn refs(
-    State(st): State<AppState>,
-    Path(repo): Path<String>,
-    RawQuery(q): RawQuery,
-) -> Response {
-    let r = match GitOpen(&st.root, &repo) {
+async fn refs(st: &AppState, repo: &str, query: Option<&str>) -> Response {
+    let r = match GitOpen(&st.root, repo) {
         Ok(r) => r,
         Err(e) => return map_err(e),
     };
     let desc = read_desc(&r);
     let ctx = RepoCtx {
-        name: &repo,
+        name: repo,
         description: &desc,
     };
 
     const PAGE: usize = 15;
-    let offset = parse_offset(q.as_deref());
+    let offset = parse_offset(query);
     let mut refs = match git_refs(&r, offset, PAGE + 1) {
         Ok(x) => x,
         Err(e) => return map_err(e),
@@ -292,79 +323,66 @@ async fn refs(
     ))
 }
 
-async fn tree_root(State(st): State<AppState>, Path(repo): Path<String>) -> Response {
-    tree_inner(st, repo, String::new()).await
-}
-
-async fn tree_path(
-    State(st): State<AppState>,
-    Path((repo, path)): Path<(String, String)>,
-) -> Response {
-    tree_inner(st, repo, path).await
-}
-
-async fn tree_inner(st: AppState, repo: String, path: String) -> Response {
-    let r = match GitOpen(&st.root, &repo) {
+async fn tree(st: &AppState, repo: &str, path: &str) -> Response {
+    let r = match GitOpen(&st.root, repo) {
         Ok(r) => r,
         Err(e) => return map_err(e),
     };
     let desc = read_desc(&r);
     let ctx = RepoCtx {
-        name: &repo,
+        name: repo,
         description: &desc,
     };
 
-    match path_content(&r, None, &path) {
+    match path_content(&r, None, path) {
         Ok(PathContent::Dir(items)) => {
             let readme = render_readme(&r, &items);
-            page(views::tree::tree_page(&ctx, &path, &items, readme))
+            page(views::tree::tree_page(&ctx, path, &items, readme))
         }
-        Ok(PathContent::File { .. }) => {
-            Redirect::to(&format!("/{repo}/blob/{path}")).into_response()
-        }
+        Ok(PathContent::File { .. }) => redirect(&format!("/{repo}/blob/{path}")),
         Err(e) => map_err(e),
     }
 }
 
-async fn blob(State(st): State<AppState>, Path((repo, path)): Path<(String, String)>) -> Response {
-    let r = match GitOpen(&st.root, &repo) {
+async fn blob(st: &AppState, repo: &str, path: &str) -> Response {
+    let r = match GitOpen(&st.root, repo) {
         Ok(r) => r,
         Err(e) => return map_err(e),
     };
     let desc = read_desc(&r);
     let ctx = RepoCtx {
-        name: &repo,
+        name: repo,
         description: &desc,
     };
 
-    match path_content(&r, None, &path) {
+    match path_content(&r, None, path) {
         Ok(PathContent::File { data, .. }) => {
             let size = data.len();
             if util::looks_binary(&data) {
-                page(views::blob::blob_page(&ctx, &path, &[], size, true))
+                page(views::blob::blob_page(&ctx, path, &[], size, true))
             } else {
                 let text = String::from_utf8_lossy(&data);
-                let lines = st.hl.highlight(&text, &path);
-                page(views::blob::blob_page(&ctx, &path, &lines, size, false))
+                let lines = st.hl.highlight(&text, path);
+                page(views::blob::blob_page(&ctx, path, &lines, size, false))
             }
         }
-        Ok(PathContent::Dir(_)) => Redirect::to(&format!("/{repo}/tree/{path}")).into_response(),
+        Ok(PathContent::Dir(_)) => redirect(&format!("/{repo}/tree/{path}")),
         Err(e) => map_err(e),
     }
 }
 
-async fn commit(State(st): State<AppState>, Path((repo, id)): Path<(String, String)>) -> Response {
-    let r = match GitOpen(&st.root, &repo) {
+async fn commit_view(st: &AppState, repo: &str, id: &str) -> Response {
+    let r = match GitOpen(&st.root, repo) {
         Ok(r) => r,
         Err(e) => return map_err(e),
     };
     let desc = read_desc(&r);
     let ctx = RepoCtx {
-        name: &repo,
+        name: repo,
         description: &desc,
     };
 
-    match commit_diff(&r, &id) {
+    match commit_diff(&r, id) {
         Ok((info, parents, files)) => {
             page(views::commit::commit_page(&ctx, &info, &parents, &files))
         }

@@ -10,11 +10,15 @@ heap-analyse = ["dep:dhat"]
 jemalloc = ["dep:tikv-jemallocator"]
 
 [dependencies]
-axum = { version = "0.8.9", default-features = false, features = ["tokio", "http1"] }
+smol = "2"
+async-h1 = "2"
+http-types = "2"
+futures-lite = "2"
+async-lock = "3"
+async-signal = "0.2"
+percent-encoding = "2"
 dhat = { version = "0.3", optional = true }
 flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
-tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "macros", "net", "process", "io-util", "signal"] }
-tokio-util = { version = "0.7", default-features = false, features = ["io"] }
 gix = { version = "0.85", default-features = false, features = ["sha1", "blob-diff"] }
 maud = { version = "0.27", default-features = false }
 similar = { version = "3.1.1", default-features = false, features = ["text"] }
@@ -33,7 +37,11 @@ tree-sitter-html = "0.23"
 
 [profile.release]
 strip = true
-opt-level = "z"
+opt-level = "s"
 lto = true
 codegen-units = 1
 panic = "abort"
+debug-assertions = false
+overflow-checks = false
+rpath = false
+incremental = false

@@ -69,9 +69,6 @@ fn render_html(title: &str, repo: Option<&RepoCtx>, active: &str, body: Markup) 
                     ". Powered by "
                     "\n\t"
                     a href="https://github.com/GitoxideLabs/gitoxide" { "gitoxide" }
-                    ", "
-                    "\n\t"
-                    a href="https://github.com/tokio-rs/axum" { "axum" }
                     " and "
                     "\n\t"
                     a href="https://github.com/tree-sitter/tree-sitter" { "tree-sitter" }
