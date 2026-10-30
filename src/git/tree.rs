@@ -12,9 +12,11 @@ pub struct TreeItem {
     pub size: usize,
 }
 
+const MAX_BLOB_BYTES: usize = 128 * 1024;
+
 pub enum PathContent {
     Dir(Vec<TreeItem>),
-    File { data: Vec<u8> },
+    File { data: Vec<u8>, size: usize, too_large: bool },
 }
 
 fn commit_tree<'r>(repo: &'r gix::Repository, spec: Option<&str>) -> Result<gix::Tree<'r>> {
@@ -31,15 +33,25 @@ pub fn path_content(repo: &gix::Repository, spec: Option<&str>, path: &str) -> R
         tree
     } else {
         let entry = tree.lookup_entry_by_path(path)?.ok_or(Error::NotFound)?;
-        let obj = entry.object()?;
-        match obj.kind {
+        let header = repo.find_header(entry.oid())?;
+        match header.kind() {
             gix::object::Kind::Blob => {
-                let blob = obj.into_blob();
+                let size = header.size() as usize;
+                if size > MAX_BLOB_BYTES {
+                    return Ok(PathContent::File {
+                        data: Vec::new(),
+                        size,
+                        too_large: true,
+                    });
+                }
+                let blob = entry.object()?.into_blob();
                 return Ok(PathContent::File {
-                    data: blob.data.clone(),
+                    size: blob.data.len(),
+                    data: blob.detach().data,
+                    too_large: false,
                 });
             }
-            gix::object::Kind::Tree => obj.into_tree(),
+            gix::object::Kind::Tree => entry.object()?.into_tree(),
             _ => return Err(Error::NotFound),
         }
     };
@@ -55,7 +67,7 @@ pub fn path_content(repo: &gix::Repository, spec: Option<&str>, path: &str) -> R
         let size = if is_dir {
             0
         } else {
-            repo.find_object(e.oid()).map(|o| o.data.len()).unwrap_or(0)
+            repo.find_header(e.oid()).map(|h| h.size() as usize).unwrap_or(0)
         };
         items.push(TreeItem {
             name: e.filename().to_str_lossy().to_string(),

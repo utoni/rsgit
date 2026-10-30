@@ -1,5 +1,5 @@
 use super::{
-    commit::{commit_info, resolve_commit, CommitInfo},
+    commit::{CommitInfo, commit_info, resolve_commit},
     error::Result,
 };
 use gix::bstr::ByteSlice;
@@ -36,12 +36,18 @@ pub struct FileDiff {
     pub hunks: Vec<Vec<DiffLine>>,
 }
 
-const MAX_DIFF_BYTES: usize = 512 * 1024;
+const MAX_DIFF_BYTES: usize = 128 * 1024;
+const MAX_TOTAL_DIFF_BYTES: u64 = 256 * 1024;
+const MAX_DIFF_FILES: usize = 64;
 
-fn blob_bytes(repo: &gix::Repository, id: gix::ObjectId) -> Vec<u8> {
-    repo.find_object(id)
-        .ok()
-        .map(|o| o.into_blob().data.clone())
+fn blob_size(repo: &gix::Repository, id: Option<gix::ObjectId>) -> u64 {
+    id.and_then(|i| repo.find_header(i).ok())
+        .map(|h| h.size())
+        .unwrap_or(0)
+}
+fn blob_bytes(repo: &gix::Repository, id: Option<gix::ObjectId>) -> Vec<u8> {
+    id.and_then(|i| repo.find_object(i).ok())
+        .map(|o| o.detach().data)
         .unwrap_or_default()
 }
 
@@ -133,17 +139,32 @@ pub fn commit_diff(
     )?;
 
     let mut files = Vec::new();
-    for raw in raws {
-        let old = raw.old_id.map(|i| blob_bytes(repo, i)).unwrap_or_default();
-        let new = raw.new_id.map(|i| blob_bytes(repo, i)).unwrap_or_default();
+    let mut total: u64 = 0;
+    if raws.len() > MAX_DIFF_FILES {
+        return Ok((info, parent_hex, files));
+    }
+    for (n, raw) in raws.into_iter().enumerate() {
+        let old_size = blob_size(repo, raw.old_id);
+        let new_size = blob_size(repo, raw.new_id);
+        let too_large = old_size > MAX_DIFF_BYTES as u64
+            || new_size > MAX_DIFF_BYTES as u64
+            || n >= MAX_DIFF_FILES
+            || total + old_size + new_size > MAX_TOTAL_DIFF_BYTES;
 
-        let binary = crate::util::looks_binary(&old) || crate::util::looks_binary(&new);
-        let too_large = old.len() > MAX_DIFF_BYTES || new.len() > MAX_DIFF_BYTES;
-
-        let (hunks, added, removed) = if binary || too_large {
-            (Vec::new(), 0, 0)
+        let (binary, hunks, added, removed) = if too_large {
+            (false, Vec::new(), 0, 0)
         } else {
-            build_hunks(&old, &new)
+            total += old_size + new_size;
+            let old = blob_bytes(repo, raw.old_id);
+            let new = blob_bytes(repo, raw.new_id);
+            let binary = (old.len() > 0 && crate::util::looks_binary(&old))
+                || (new.len() > 0 && crate::util::looks_binary(&new));
+            if binary {
+                (true, Vec::new(), 0, 0)
+            } else {
+                let (h, a, r) = build_hunks(&old, &new);
+                (false, h, a, r)
+            }
         };
 
         files.push(FileDiff {

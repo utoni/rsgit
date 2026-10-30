@@ -67,7 +67,7 @@ async fn async_main() -> std::io::Result<()> {
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
     let bind = args
         .next()
-        .or_else(|| std::env::var("FERRO_BIND").ok())
+        .or_else(|| std::env::var("RSGIT_BIND").ok())
         .unwrap_or_else(|| "127.0.0.1:8080".to_string());
 
     if !root.is_dir() {
@@ -356,9 +356,8 @@ async fn blob(st: &AppState, repo: &str, path: &str) -> Response {
     };
 
     match path_content(&r, None, path) {
-        Ok(PathContent::File { data, .. }) => {
-            let size = data.len();
-            if util::looks_binary(&data) {
+        Ok(PathContent::File { data, size, too_large }) => {
+            if too_large || util::looks_binary(&data) {
                 page(views::blob::blob_page(&ctx, path, &[], size, true))
             } else {
                 let text = String::from_utf8_lossy(&data);

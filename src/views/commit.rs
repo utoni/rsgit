@@ -69,9 +69,11 @@ pub fn commit_page(
                             (old) " → " (f.path)
                         } @else { (f.path) }
                     }
-                    span .mut {
-                        span .stat-add { "+" (f.added) } " "
-                        span .stat-del { "−" (f.removed) }
+                    @if !f.too_large && !f.binary {
+                        span .mut {
+                            span .stat-add { "+" (f.added) } " "
+                            span .stat-del { "−" (f.removed) }
+                        }
                     }
                 }
                 @if f.binary {

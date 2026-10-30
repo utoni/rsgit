@@ -67,7 +67,10 @@ pub fn human_size(bytes: usize) -> String {
 }
 
 pub fn looks_binary(data: &[u8]) -> bool {
-    let n = data.len().min(8000);
+    let n = data.len().min(128);
+    if n == 0 {
+        return false;
+    }
     if let Ok(s) = str::from_utf8(data) {
         let ok = s.chars().all(|c| !c.is_control() && !c.is_ascii_graphic());
         return ok;
