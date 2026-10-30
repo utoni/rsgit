@@ -5,7 +5,7 @@ mod views;
 
 use async_lock::Semaphore;
 use futures_lite::{FutureExt, StreamExt};
-use http_types::{mime, Method, Request, Response, StatusCode};
+use http_types::{Method, Request, Response, StatusCode, mime};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -13,9 +13,9 @@ use git::{
     clone as GitClone, commit,
     diff::commit_diff,
     error::Error as GitError,
-    references::{refs as git_refs, Refs},
+    references::{Refs, refs as git_refs},
     repository::{discover as GitDiscover, open as GitOpen},
-    tree::{find_readme, path_content, PathContent, TreeItem},
+    tree::{PathContent, TreeItem, find_readme, path_content},
 };
 use highlight::Highlighter;
 use views::RepoCtx;
@@ -206,7 +206,7 @@ fn render_readme(repo: &gix::Repository, items: &[TreeItem]) -> Option<String> {
     let text = String::from_utf8_lossy(&bytes);
     let lower = name.to_ascii_lowercase();
     if lower.ends_with(".md") || lower.ends_with(".markdown") {
-        use pulldown_cmark::{html, Options, Parser};
+        use pulldown_cmark::{Options, Parser, html};
         let mut opts = Options::empty();
         opts.insert(Options::ENABLE_TABLES);
         opts.insert(Options::ENABLE_STRIKETHROUGH);
@@ -356,7 +356,11 @@ async fn blob(st: &AppState, repo: &str, path: &str) -> Response {
     };
 
     match path_content(&r, None, path) {
-        Ok(PathContent::File { data, size, too_large }) => {
+        Ok(PathContent::File {
+            data,
+            size,
+            too_large,
+        }) => {
             if too_large || util::looks_binary(&data) {
                 page(views::blob::blob_page(&ctx, path, &[], size, true))
             } else {

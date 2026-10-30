@@ -1,5 +1,5 @@
-use super::{breadcrumbs, human_size, render_html, RepoCtx, TreeItem};
-use maud::{html, Markup, PreEscaped};
+use super::{RepoCtx, TreeItem, breadcrumbs, human_size, render_html};
+use maud::{Markup, PreEscaped, html};
 
 fn mode_str(it: &TreeItem) -> &'static str {
     if it.is_dir {

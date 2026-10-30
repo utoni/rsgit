@@ -16,7 +16,11 @@ const MAX_BLOB_BYTES: usize = 128 * 1024;
 
 pub enum PathContent {
     Dir(Vec<TreeItem>),
-    File { data: Vec<u8>, size: usize, too_large: bool },
+    File {
+        data: Vec<u8>,
+        size: usize,
+        too_large: bool,
+    },
 }
 
 fn commit_tree<'r>(repo: &'r gix::Repository, spec: Option<&str>) -> Result<gix::Tree<'r>> {
@@ -67,7 +71,9 @@ pub fn path_content(repo: &gix::Repository, spec: Option<&str>, path: &str) -> R
         let size = if is_dir {
             0
         } else {
-            repo.find_header(e.oid()).map(|h| h.size() as usize).unwrap_or(0)
+            repo.find_header(e.oid())
+                .map(|h| h.size() as usize)
+                .unwrap_or(0)
         };
         items.push(TreeItem {
             name: e.filename().to_str_lossy().to_string(),

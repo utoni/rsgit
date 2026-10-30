@@ -1,9 +1,9 @@
-use super::{render_html, RepoCtx};
+use super::{RepoCtx, render_html};
 use crate::git::{
     commit::CommitInfo, diff::ChangeKind, diff::DiffLine, diff::FileDiff, diff::LineKind,
 };
 use crate::util::format_time;
-use maud::{html, Markup};
+use maud::{Markup, html};
 
 fn opt_no(n: Option<usize>) -> String {
     n.map(|v| v.to_string()).unwrap_or_default()
@@ -45,20 +45,31 @@ pub fn commit_page(
     let body = html! {
         .meta {
             .subject { (info.title) }
-            dl {
-                dt { "commit" } dd .mono-id { (info.id) }
-                dt { "author" } dd { (info.author_name) " <" (info.author_email) ">" }
-                dt { "date" } dd { (format_time(info.time_unix, info.time_offset)) }
+            dl { "\n"
+                "\t" dt { "commit" } dd .mono-id { (info.id) } "\n"
+                "\t" dt { "author" } dd { (info.author_name) " <" (info.author_email) ">" } "\n"
+                "\t" dt { "date" } dd { (format_time(info.time_unix, info.time_offset)) } "\n"
                 @for p in parents {
-                    dt { "parent" }
-                    dd { a .mono-id href={ "/" (ctx.name) "/commit/" (p) } { (p) } }
+                    "\t" dt { "parent" } "\n"
+                    "\t" dd { a .mono-id href={ "/" (ctx.name) "/commit/" (p) } { (p) } } "\n"
                 }
             }
         }
-        .section-title {
-            (files.len()) " files changed · "
-            span .stat-add { "+" (total_add) } " "
-            span .stat-del { "−" (total_del) }
+        @if files.len() > 0 {
+            "\n"
+            .section-title {
+                (files.len()) " files changed · "
+                @if total_add > 0 {
+                    span .stat-add { "+" (total_add) } " "
+                }
+                @if total_del > 0 {
+                    span .stat-del { "−" (total_del) }
+                }
+            } "\n"
+        } @else {
+            .section-title {
+                "Too many files changed"
+            }
         }
         @for f in files {
             .filediff {
@@ -70,12 +81,13 @@ pub fn commit_page(
                         } @else { (f.path) }
                     }
                     @if !f.too_large && !f.binary {
+                        "\n"
                         span .mut {
-                            span .stat-add { "+" (f.added) } " "
-                            span .stat-del { "−" (f.removed) }
+                            "\t" span .stat-add { "+" (f.added) } " "
+                            "\t" span .stat-del { "−" (f.removed) }
                         }
                     }
-                }
+                } "\n"
                 @if f.binary {
                     p .note { "Binary file" }
                 } @else if f.too_large {
@@ -88,10 +100,10 @@ pub fn commit_page(
                             tbody {
                                 @for (hi, hunk) in f.hunks.iter().enumerate() {
                                     @if hi > 0 {
-                                        tr .hsep { td colspan="3" { "⋮" } }
+                                        "\t" tr .hsep { td colspan="3" { "⋮" } } "\n"
                                     }
                                     @for line in hunk {
-                                        (diff_row(line))
+                                        "\t" (diff_row(line)) "\n"
                                     }
                                 }
                             }
@@ -99,6 +111,7 @@ pub fn commit_page(
                     }
                 }
             }
+            "\n";
         }
     };
     render_html(

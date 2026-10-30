@@ -1,9 +1,9 @@
-use super::{render_html, RepoCtx};
+use super::{RepoCtx, render_html};
 use crate::git::commit::CommitInfo;
 use crate::git::references::Refs;
 use crate::util::{format_time, relative};
 use crate::views::refs::ref_table;
-use maud::{html, Markup, PreEscaped};
+use maud::{Markup, PreEscaped, html};
 
 pub fn summary(
     ctx: &RepoCtx,

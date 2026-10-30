@@ -9,7 +9,7 @@ pub mod tree;
 use super::git::{repository::RepoSummary, tree::TreeItem};
 use crate::util::{format_time, human_size, relative};
 use crate::views::css::CSS;
-use maud::{html, Markup, PreEscaped, DOCTYPE};
+use maud::{DOCTYPE, Markup, PreEscaped, html};
 
 pub struct RepoCtx<'a> {
     pub name: &'a str,

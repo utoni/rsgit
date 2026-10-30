@@ -1,7 +1,7 @@
-use super::{render_html, RepoCtx};
+use super::{RepoCtx, render_html};
 use crate::git::commit::CommitInfo;
 use crate::util::{format_date, format_time};
-use maud::{html, Markup};
+use maud::{Markup, html};
 
 pub fn log_page(
     ctx: &RepoCtx,

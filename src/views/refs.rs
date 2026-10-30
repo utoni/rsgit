@@ -1,7 +1,7 @@
-use super::{render_html, RepoCtx};
+use super::{RepoCtx, render_html};
 use crate::git::references::{RefInfo, Refs};
 use crate::util::{format_time, relative};
-use maud::{html, Markup};
+use maud::{Markup, html};
 
 pub fn ref_table(
     ctx: &RepoCtx,
