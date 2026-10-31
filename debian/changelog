@@ -1,3 +1,9 @@
+rsgit (1.2.0) stable; urgency=medium
+
+  * Update packaging.
+
+ -- Toni Uhlig <matzeton@googlemail.com>  Fri, 30 Oct 2026 10:24:01 +0100
+
 rsgit (1.1.0) stable; urgency=medium
 
   * Update packaging.

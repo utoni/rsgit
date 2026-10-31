@@ -42,12 +42,6 @@ static ALLOC: dhat::Alloc = dhat::Alloc;
 #[global_allocator]
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
-#[cfg(all(feature = "jemalloc", not(feature = "heap-analyse")))]
-#[allow(non_upper_case_globals)]
-#[export_name = "_rjem_malloc_conf"]
-pub static malloc_conf: &[u8] =
-    b"background_thread:true,dirty_decay_ms:1000,muzzy_decay_ms:1000,narenas:2\0";
-
 fn main() -> std::io::Result<()> {
     smol::block_on(async_main())
 }

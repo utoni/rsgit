@@ -53,6 +53,7 @@ pub async fn info_refs(st: &AppState, repo: &str, query: Option<&str>) -> Respon
     };
 
     let Some(mut stdout) = child.stdout.take() else {
+        eprintln!("Failed to read stdout from git executable");
         return status_resp(StatusCode::InternalServerError, "");
     };
     let mut buf = Vec::new();

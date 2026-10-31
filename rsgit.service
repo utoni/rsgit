@@ -13,13 +13,15 @@ DynamicUser=yes
 RootDirectory=/var/lib/rsgit/root
 MountAPIVFS=yes
 
+Environment=GIT_CONFIG_COUNT=1
+Environment=GIT_CONFIG_KEY_0=safe.directory
+Environment=GIT_CONFIG_VALUE_0=*
+
 BindReadOnlyPaths=/usr/bin/git
 BindReadOnlyPaths=/usr/bin/rsgit
 BindReadOnlyPaths=/srv/git
-BindReadOnlyPaths=/lib64/ld-linux-x86-64.so.2
-BindReadOnlyPaths=/lib/x86_64-linux-gnu/libc.so.6
-BindReadOnlyPaths=/lib/x86_64-linux-gnu/libm.so.6
-BindReadOnlyPaths=/lib/x86_64-linux-gnu/libgcc_s.so.1
+BindReadOnlyPaths=/lib64
+BindReadOnlyPaths=/lib/x86_64-linux-gnu
 BindReadOnlyPaths=/etc/ld.so.cache
 
 MemoryHigh=200M

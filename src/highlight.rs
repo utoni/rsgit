@@ -128,7 +128,8 @@ where
 }
 
 fn lang_for(file_name: &str) -> Option<&'static str> {
-    let ext = std::path::Path::new(file_name)
+    let path = std::path::Path::new(file_name);
+    let ext = path
         .extension()
         .and_then(|e| e.to_str())
         .unwrap_or("")
@@ -140,13 +141,24 @@ fn lang_for(file_name: &str) -> Option<&'static str> {
         "ts" => "typescript",
         "cpp" | "cxx" | "c" | "h" | "hpp" => "c",
         "go" => "go",
-        "toml" => "toml",
         "json" => "json",
         "sh" | "bash" => "bash",
         "html" | "htm" => "html",
-        "css" => "css",
-        "md" | "markdown" => "markdown",
-        _ => return None,
+        "md" | "markdown" => "md",
+        "patch" => "diff",
+        "yml" | "yaml" => "yaml",
+        "" | _ => {
+            let basename = path
+                .file_prefix()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            let key = match basename.as_str() {
+                "makefile" | "gnumakefile" => Some("make"),
+                _ => None,
+            };
+            return key;
+        }
     };
     Some(key)
 }
@@ -245,6 +257,50 @@ fn build_configs(names: &[String]) -> Vec<(&'static str, HighlightConfiguration)
             tree_sitter_html::LANGUAGE.into(),
             "html",
             tree_sitter_html::HIGHLIGHTS_QUERY,
+            "",
+            "",
+        ),
+    );
+
+    add(
+        "diff",
+        HighlightConfiguration::new(
+            tree_sitter_diff::LANGUAGE.into(),
+            "diff",
+            tree_sitter_diff::HIGHLIGHTS_QUERY,
+            "",
+            "",
+        ),
+    );
+
+    add(
+        "make",
+        HighlightConfiguration::new(
+            tree_sitter_make::LANGUAGE.into(),
+            "make",
+            tree_sitter_make::HIGHLIGHTS_QUERY,
+            "",
+            "",
+        ),
+    );
+
+    add(
+        "yaml",
+        HighlightConfiguration::new(
+            tree_sitter_yaml::LANGUAGE.into(),
+            "yaml",
+            tree_sitter_yaml::HIGHLIGHTS_QUERY,
+            "",
+            "",
+        ),
+    );
+
+    add(
+        "md",
+        HighlightConfiguration::new(
+            tree_sitter_md::LANGUAGE.into(),
+            "md",
+            tree_sitter_md::HIGHLIGHT_QUERY_BLOCK,
             "",
             "",
         ),
