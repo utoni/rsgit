@@ -1,4 +1,4 @@
-use super::{RepoCtx, TreeItem, breadcrumbs, human_size, render_html};
+use super::{RepoCtx, TreeItem, breadcrumbs, human_size, render_html, rev_query};
 use maud::{Markup, PreEscaped, html};
 
 fn mode_str(it: &TreeItem) -> &'static str {
@@ -31,6 +31,7 @@ fn join_path(base: &str, name: &str) -> String {
 pub fn tree_page(
     ctx: &RepoCtx,
     path: &str,
+    rev: Option<&str>,
     items: &[TreeItem],
     readme_html: Option<String>,
 ) -> Markup {
@@ -38,7 +39,7 @@ pub fn tree_page(
         "\n\t"
         .section-title { "Files" }
         "\n\t"
-        (breadcrumbs(ctx, "tree", path))
+        (breadcrumbs(ctx, "tree", path, rev))
         "\n\t"
         table .grid {
             thead { tr { th { "Mode" } th { "Name" } th .num { "Size" } }}
@@ -49,7 +50,7 @@ pub fn tree_page(
                     "\n\t\t"
                     tr {
                         td .faint { "d---------" }
-                        td { a href={ "/" (ctx.name) "/tree/" (parent) } { ".." } }
+                        td { a href={ "/" (ctx.name) "/tree/" (parent) (rev_query(rev)) } { ".." } }
                         td {}
                     }
                 }
@@ -64,9 +65,9 @@ pub fn tree_page(
                             " "
                             @let child = join_path(path, &it.name);
                             @if it.is_dir {
-                                a href={ "/" (ctx.name) "/tree/" (child) } { (it.name) "/" }
+                                a href={ "/" (ctx.name) "/tree/" (child) (rev_query(rev)) } { (it.name) "/" }
                             } @else {
-                                a href={ "/" (ctx.name) "/blob/" (child) } { (it.name) }
+                                a href={ "/" (ctx.name) "/blob/" (child) (rev_query(rev)) } { (it.name) }
                             }
                         }
                         td .num .nowrap { @if it.is_dir { "" } @else { (human_size(it.size)) } }

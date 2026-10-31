@@ -117,7 +117,18 @@ pub fn index(repos: &[RepoSummary], now: i64) -> Markup {
     render_html("rsgit — Repositories", None, "", body)
 }
 
-fn breadcrumbs(ctx: &RepoCtx, kind: &str, path: &str) -> Markup {
+pub fn rev_query(rev: Option<&str>) -> String {
+    match rev {
+        Some(r) => format!(
+            "?rev={}",
+            percent_encoding::utf8_percent_encode(r, percent_encoding::NON_ALPHANUMERIC)
+        ),
+        None => String::new(),
+    }
+}
+
+fn breadcrumbs(ctx: &RepoCtx, kind: &str, path: &str, rev: Option<&str>) -> Markup {
+    let q = rev_query(rev);
     let parts: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
     let mut crumbs: Vec<(String, Option<String>)> = Vec::new();
     let mut acc = String::new();
@@ -135,11 +146,11 @@ fn breadcrumbs(ctx: &RepoCtx, kind: &str, path: &str) -> Markup {
     }
     html! {
         span .crumbs {
-            a href={ "/" (ctx.name) "/tree" } { "tree" }
+            a href={ "/" (ctx.name) "/tree" (q) } { "tree" }
             @for (label, link) in &crumbs {
                 span .sep { "/" }
                 @match link {
-                    Some(href) => a href={ "/" (ctx.name) "/tree/" (href) } { (label) },
+                    Some(href) => a href={ "/" (ctx.name) "/tree/" (href) (q) } { (label) },
                     None => (label),
                 }
             }

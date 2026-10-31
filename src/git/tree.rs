@@ -95,3 +95,14 @@ pub fn find_readme(items: &[TreeItem]) -> Option<String> {
     candidates.sort_by_key(|i| i.name.len());
     candidates.first().map(|i| i.name.clone())
 }
+
+pub fn raw_blob(repo: &gix::Repository, spec: Option<&str>, path: &str) -> Result<Vec<u8>> {
+    let tree = commit_tree(repo, spec)?;
+    let entry = tree
+        .lookup_entry_by_path(path.trim_matches('/'))?
+        .ok_or(Error::NotFound)?;
+    if entry.mode().is_tree() {
+        return Err(Error::NotFound);
+    }
+    Ok(entry.object()?.into_blob().detach().data)
+}

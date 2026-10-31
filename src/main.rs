@@ -15,7 +15,7 @@ use git::{
     error::Error as GitError,
     references::{Refs, refs as git_refs},
     repository::{discover as GitDiscover, open as GitOpen},
-    tree::{PathContent, TreeItem, find_readme, path_content},
+    tree::{PathContent, TreeItem, find_readme, path_content, raw_blob},
 };
 use highlight::Highlighter;
 use views::RepoCtx;
@@ -148,9 +148,10 @@ async fn route(st: AppState, req: Request) -> Response {
         [repo] => summary(&st, repo).await,
         [repo, "log"] => log(&st, repo, query.as_deref()).await,
         [repo, "refs"] => refs(&st, repo, query.as_deref()).await,
-        [repo, "tree"] => tree(&st, repo, "").await,
-        [repo, "tree", rest @ ..] => tree(&st, repo, &rest.join("/")).await,
-        [repo, "blob", rest @ ..] => blob(&st, repo, &rest.join("/")).await,
+        [repo, "tree"] => tree(&st, repo, "", query.as_deref()).await,
+        [repo, "tree", rest @ ..] => tree(&st, repo, &rest.join("/"), query.as_deref()).await,
+        [repo, "raw", rest @ ..] => raw(&st, repo, &rest.join("/"), query.as_deref()).await,
+        [repo, "blob", rest @ ..] => blob(&st, repo, &rest.join("/"), query.as_deref()).await,
         [repo, "commit", id] => commit_view(&st, repo, id).await,
         _ => not_found(),
     }
@@ -191,21 +192,39 @@ fn map_err(e: GitError) -> Response {
     }
 }
 
-fn render_readme(repo: &gix::Repository, items: &[TreeItem]) -> Option<String> {
+fn render_readme(repo: &gix::Repository, rev: Option<&str>, items: &[TreeItem]) -> Option<String> {
     let name = find_readme(items)?;
-    let bytes = match path_content(repo, None, &name).ok()? {
+
+    let bytes = match path_content(repo, rev, &name).ok()? {
         PathContent::File { data, .. } => data,
         _ => return None,
     };
     let text = String::from_utf8_lossy(&bytes);
     let lower = name.to_ascii_lowercase();
     if lower.ends_with(".md") || lower.ends_with(".markdown") {
-        use pulldown_cmark::{Options, Parser, html};
+        use pulldown_cmark::{Event, Options, Parser, Tag, html};
         let mut opts = Options::empty();
         opts.insert(Options::ENABLE_TABLES);
         opts.insert(Options::ENABLE_STRIKETHROUGH);
         opts.insert(Options::ENABLE_FOOTNOTES);
-        let parser = Parser::new_ext(&text, opts);
+        fn safe(u: pulldown_cmark::CowStr<'_>) -> pulldown_cmark::CowStr<'_> {
+            let l = u.trim_start().to_ascii_lowercase();
+            if l.starts_with("javascript:") || l.starts_with("data:") || l.starts_with("vbscript:") {
+                "#".into()
+            } else {
+                u
+            }
+        }
+        let parser = Parser::new_ext(&text, opts).map(|ev| match ev {
+            Event::Html(s) | Event::InlineHtml(s) => Event::Text(s),
+            Event::Start(Tag::Link { link_type, dest_url, title, id }) => {
+                Event::Start(Tag::Link { link_type, dest_url: safe(dest_url), title, id })
+            }
+            Event::Start(Tag::Image { link_type, dest_url, title, id }) => {
+                Event::Start(Tag::Image { link_type, dest_url: safe(dest_url), title, id })
+            }
+            e => e,
+        });
         let mut out = String::new();
         html::push_html(&mut out, parser);
         Some(out)
@@ -241,7 +260,7 @@ async fn summary(st: &AppState, repo: &str) -> Response {
     });
 
     let readme = match path_content(&r, None, "") {
-        Ok(PathContent::Dir(items)) => render_readme(&r, &items),
+        Ok(PathContent::Dir(items)) => render_readme(&r, None, &items),
         _ => None,
     };
 
@@ -317,7 +336,8 @@ async fn refs(st: &AppState, repo: &str, query: Option<&str>) -> Response {
     ))
 }
 
-async fn tree(st: &AppState, repo: &str, path: &str) -> Response {
+async fn tree(st: &AppState, repo: &str, path: &str, query: Option<&str>) -> Response {
+    let rev = parse_rev(query);
     let r = match GitOpen(&st.root, repo) {
         Ok(r) => r,
         Err(e) => return map_err(e),
@@ -328,17 +348,24 @@ async fn tree(st: &AppState, repo: &str, path: &str) -> Response {
         description: &desc,
     };
 
-    match path_content(&r, None, path) {
+    match path_content(&r, rev.as_deref(), path) {
         Ok(PathContent::Dir(items)) => {
-            let readme = render_readme(&r, &items);
-            page(views::tree::tree_page(&ctx, path, &items, readme))
+            let readme = render_readme(&r, rev.as_deref(), &items);
+            page(views::tree::tree_page(
+                &ctx,
+                path,
+                rev.as_deref(),
+                &items,
+                readme,
+            ))
         }
         Ok(PathContent::File { .. }) => redirect(&format!("/{repo}/blob/{path}")),
         Err(e) => map_err(e),
     }
 }
 
-async fn blob(st: &AppState, repo: &str, path: &str) -> Response {
+async fn blob(st: &AppState, repo: &str, path: &str, query: Option<&str>) -> Response {
+    let rev = parse_rev(query);
     let r = match GitOpen(&st.root, repo) {
         Ok(r) => r,
         Err(e) => return map_err(e),
@@ -349,23 +376,90 @@ async fn blob(st: &AppState, repo: &str, path: &str) -> Response {
         description: &desc,
     };
 
-    match path_content(&r, None, path) {
+    match path_content(&r, rev.as_deref(), path) {
         Ok(PathContent::File {
             data,
             size,
             too_large,
         }) => {
             if too_large || util::looks_binary(&data) {
-                page(views::blob::blob_page(&ctx, path, &[], size, true))
+                page(views::blob::blob_page(
+                    &ctx,
+                    path,
+                    rev.as_deref(),
+                    &[],
+                    size,
+                    true,
+                ))
             } else {
                 let text = String::from_utf8_lossy(&data);
                 let lines = st.hl.highlight(&text, path);
-                page(views::blob::blob_page(&ctx, path, &lines, size, false))
+                page(views::blob::blob_page(
+                    &ctx,
+                    path,
+                    rev.as_deref(),
+                    &lines,
+                    size,
+                    false,
+                ))
             }
         }
-        Ok(PathContent::Dir(_)) => redirect(&format!("/{repo}/tree/{path}")),
+        Ok(PathContent::Dir(_)) => redirect(&format!(
+            "/{repo}/tree/{path}{}",
+            views::rev_query(rev.as_deref())
+        )),
         Err(e) => map_err(e),
     }
+}
+
+async fn raw(st: &AppState, repo: &str, path: &str, query: Option<&str>) -> Response {
+    let rev = parse_rev(query);
+    let r = match GitOpen(&st.root, repo) {
+        Ok(r) => r,
+        Err(e) => return map_err(e),
+    };
+    let data = match raw_blob(&r, rev.as_deref(), path) {
+        Ok(d) => d,
+        Err(e) => return map_err(e),
+    };
+    let ctype = path
+        .rsplit_once('.')
+        .and_then(|(_, e)| mime::Mime::from_extension(e.to_ascii_lowercase()))
+        .map(|m| m.to_string())
+        .unwrap_or_else(|| {
+            if util::looks_binary(&data) {
+                "application/octet-stream".into()
+            } else {
+                "text/plain; charset=utf-8".into()
+            }
+        });
+    let name = path
+        .rsplit('/')
+        .next()
+        .unwrap_or(path)
+        .replace(['"', '\\', '\r', '\n'], "_");
+    let mut res = Response::new(StatusCode::Ok);
+    res.insert_header("content-type", ctype);
+    res.insert_header(
+        "content-disposition",
+        format!("inline; filename=\"{name}\""),
+    );
+    res.insert_header("x-content-type-options", "nosniff");
+    res.insert_header("content-security-policy", "sandbox; default-src 'none'");
+    res.set_body(data);
+    res
+}
+
+fn parse_rev(query: Option<&str>) -> Option<String> {
+    query?
+        .split('&')
+        .find_map(|p| p.strip_prefix("rev="))
+        .map(|v| {
+            percent_encoding::percent_decode_str(v)
+                .decode_utf8_lossy()
+                .into_owned()
+        })
+        .filter(|v| !v.is_empty())
 }
 
 async fn commit_view(st: &AppState, repo: &str, id: &str) -> Response {

@@ -1,19 +1,23 @@
-use super::{RepoCtx, breadcrumbs, human_size, render_html};
+use super::{RepoCtx, breadcrumbs, human_size, render_html, rev_query};
 use maud::{Markup, PreEscaped, html};
 
 pub fn blob_page(
     ctx: &RepoCtx,
     path: &str,
+    rev: Option<&str>,
     lines: &[String],
     size: usize,
     is_binary: bool,
 ) -> Markup {
     let body = html! {
-        (breadcrumbs(ctx, "blob", path))
+        (breadcrumbs(ctx, "blob", path, rev))
         "\n"
         .blobhead {
             span { (path.rsplit('/').next().unwrap_or(path)) }
-            span .mut { (lines.len()) " lines · " (human_size(size)) }
+            span .mut {
+                @if let Some(r) = rev { "@" (&r[..r.len().min(10)]) " · " }
+                (lines.len()) " lines · " (human_size(size)) " · "
+                a href={ "/" (ctx.name) "/raw/" (path) (rev_query(rev)) } { "raw" } }
         }
         @if is_binary {
             "\n"

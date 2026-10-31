@@ -77,8 +77,8 @@ pub fn commit_page(
                     (change_badge(f.kind))
                     span {
                         @if let Some(old) = &f.old_path {
-                            (old) " → " a href={ "/" (ctx.name) "/blob/" (f.path) } { (f.path) }
-                        } @else { a href={ "/" (ctx.name) "/blob/" (f.path) } { (f.path) } }
+                            (old) " → " a href={ "/" (ctx.name) "/blob/" (f.path) "?rev=" (info.id) } { (f.path) }
+                        } @else { a href={ "/" (ctx.name) "/blob/" (f.path) "?rev=" (info.id) } { (f.path) } }
                     }
                     @if !f.too_large && !f.binary {
                         "\n"
