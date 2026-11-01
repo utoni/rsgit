@@ -97,7 +97,7 @@ pub fn index(repos: &[RepoSummary], now: i64) -> Markup {
                     @for r in repos {
                         "\n\t\t"
                         tr {
-                            td .nowrap { a href={ "/" (r.name) } { (r.name) } }
+                            td .repo-name { a href={ "/" (r.name) } { (r.name) } }
                             td .desc { (r.description) }
                             td .nowrap .mut {
                                 @if let Some(t) = r.last_commit_unix {

@@ -56,6 +56,8 @@ table.grid td{padding:7px 10px;border-bottom:1px solid var(--rule);vertical-alig
 table.grid tr:hover td{background:var(--panel)}
 .num{text-align:right;color:var(--faint);font-variant-numeric:tabular-nums}
 .nowrap{white-space:nowrap}
+.repo-name{overflow-wrap:anywhere;word-break:break-word;min-width:min(12ch,30vw)}
+.desc{overflow-wrap:anywhere}
 .desc{color:var(--muted);font-family:var(--sans)}
 .mono-id{color:var(--oxide-dim)}
 .mut{color:var(--muted)}

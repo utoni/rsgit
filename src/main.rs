@@ -390,6 +390,7 @@ async fn blob(st: &AppState, repo: &str, path: &str, query: Option<&str>) -> Res
                     &[],
                     size,
                     true,
+                    too_large,
                 ))
             } else {
                 let text = String::from_utf8_lossy(&data);
@@ -400,6 +401,7 @@ async fn blob(st: &AppState, repo: &str, path: &str, query: Option<&str>) -> Res
                     rev.as_deref(),
                     &lines,
                     size,
+                    false,
                     false,
                 ))
             }

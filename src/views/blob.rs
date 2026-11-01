@@ -8,6 +8,7 @@ pub fn blob_page(
     lines: &[String],
     size: usize,
     is_binary: bool,
+    too_large: bool,
 ) -> Markup {
     let body = html! {
         (breadcrumbs(ctx, "blob", path, rev))
@@ -16,12 +17,16 @@ pub fn blob_page(
             span { (path.rsplit('/').next().unwrap_or(path)) }
             span .mut {
                 @if let Some(r) = rev { "@" (&r[..r.len().min(10)]) " · " }
-                (lines.len()) " lines · " (human_size(size)) " · "
+                @if !too_large { (lines.len()) " lines · " }
+                (human_size(size)) " · "
                 a href={ "/" (ctx.name) "/raw/" (path) (rev_query(rev)) } { "raw" } }
         }
         @if is_binary {
             "\n"
-            .code { p .note { "Binary file — no preview available." } }
+            .code { p .note {
+                @if too_large { "File too large for preview — use the raw link." }
+                @else { "Binary file — no preview available." }
+            } }
         } @else {
             "\n"
             .code {
