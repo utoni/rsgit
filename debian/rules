@@ -6,6 +6,7 @@ export CARGO_TARGET_DIR := $(CURDIR)/target
 	dh $@
 
 override_dh_auto_build:
+	rm -rf target debian/cargo
 	cargo build --release --locked
 
 override_dh_auto_install:
