@@ -9,6 +9,7 @@ pub struct TreeItem {
     pub is_dir: bool,
     pub is_exec: bool,
     pub is_link: bool,
+    pub is_submodule: bool,
     pub size: usize,
 }
 
@@ -37,6 +38,9 @@ pub fn path_content(repo: &gix::Repository, spec: Option<&str>, path: &str) -> R
         tree
     } else {
         let entry = tree.lookup_entry_by_path(path)?.ok_or(Error::NotFound)?;
+        if entry.mode().is_commit() {
+            return Err(Error::NotFound);
+        }
         let header = repo.find_header(entry.oid())?;
         match header.kind() {
             gix::object::Kind::Blob => {
@@ -68,7 +72,8 @@ pub fn path_content(repo: &gix::Repository, spec: Option<&str>, path: &str) -> R
         let is_dir = matches!(kind, gix::objs::tree::EntryKind::Tree);
         let is_exec = matches!(kind, gix::objs::tree::EntryKind::BlobExecutable);
         let is_link = matches!(kind, gix::objs::tree::EntryKind::Link);
-        let size = if is_dir {
+        let is_submodule = matches!(kind, gix::objs::tree::EntryKind::Commit);
+        let size = if is_dir || is_submodule {
             0
         } else {
             repo.find_header(e.oid())
@@ -80,6 +85,7 @@ pub fn path_content(repo: &gix::Repository, spec: Option<&str>, path: &str) -> R
             is_dir,
             is_exec,
             is_link,
+            is_submodule,
             size,
         });
     }
@@ -101,7 +107,7 @@ pub fn raw_blob(repo: &gix::Repository, spec: Option<&str>, path: &str) -> Resul
     let entry = tree
         .lookup_entry_by_path(path.trim_matches('/'))?
         .ok_or(Error::NotFound)?;
-    if entry.mode().is_tree() {
+    if entry.mode().is_tree() || entry.mode().is_commit() {
         return Err(Error::NotFound);
     }
     Ok(entry.object()?.into_blob().detach().data)

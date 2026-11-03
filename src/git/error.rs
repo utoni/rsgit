@@ -16,6 +16,7 @@ impl std::fmt::Display for Error {
         }
     }
 }
+
 impl<E: std::error::Error> From<E> for Error {
     fn from(e: E) -> Self {
         Error::Git(e.to_string())

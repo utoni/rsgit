@@ -2,7 +2,9 @@ use super::{RepoCtx, TreeItem, breadcrumbs, human_size, render_html, rev_query};
 use maud::{Markup, PreEscaped, html};
 
 fn mode_str(it: &TreeItem) -> &'static str {
-    if it.is_dir {
+    if it.is_submodule {
+        "m---------"
+    } else if it.is_dir {
         "drwxr-xr-x"
     } else if it.is_link {
         "lrwxrwxrwx"
@@ -57,17 +59,19 @@ pub fn tree_page(
                 @for it in items {
                     "\n\t\t"
                     tr {
-                        td .faint .nowrap { (mode_str(it)) }
+                        td .faint .nowrap { @if !it.is_submodule { (mode_str(it)) } @else { "m---------" } }
                         td {
                             span .icon .dir[it.is_dir] {
-                                @if it.is_dir { "▸" } @else if it.is_link { "↪" } @else { "·" }
+                                @if it.is_dir { "▸" } @else if it.is_link || it.is_submodule { "↪" } @else { "·" }
                             }
                             " "
                             @let child = join_path(path, &it.name);
                             @if it.is_dir {
                                 a href={ "/" (ctx.name) "/tree/" (child) (rev_query(rev)) } { (it.name) "/" }
-                            } @else {
+                            } @else if !it.is_submodule {
                                 a href={ "/" (ctx.name) "/blob/" (child) (rev_query(rev)) } { (it.name) }
+                            } @else {
+                                (it.name)
                             }
                         }
                         td .num .nowrap { @if it.is_dir { "" } @else { (human_size(it.size)) } }
