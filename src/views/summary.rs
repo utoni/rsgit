@@ -29,8 +29,8 @@ pub fn summary(
                     tr {
                         td .nowrap { a .mono-id href={ "/" (ctx.name) "/commit/" (c.id) } { (c.short) } }
                         td { a href={ "/" (ctx.name) "/commit/" (c.id) } { (c.title) } }
-                        td .nowrap .mut { (c.author_name) }
-                        td .nowrap .mut title=(format_time(c.time_unix, c.time_offset)) {
+                        td .mut { (c.author_name) }
+                        td .mut title=(format_time(c.time_unix, c.time_offset)) {
                             (relative(c.time_unix, now))
                         }
                     }

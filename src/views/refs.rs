@@ -23,7 +23,7 @@ pub fn ref_table(
                         td .nowrap { (r.name) }
                         td .nowrap { a .mono-id href={ "/" (ctx.name) "/commit/" (r.target) } { (r.short) } }
                         td .mut { (r.subject) }
-                        td .nowrap .mut title=(format_time(r.time_unix, r.time_offset)) {
+                        td .mut title=(format_time(r.time_unix, r.time_offset)) {
                             (relative(r.time_unix, now))
                         }
                     }

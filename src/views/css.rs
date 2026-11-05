@@ -10,9 +10,9 @@ pub const CSS: &str = r#"
   --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
 }
 *{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%;background:var(--bg)}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%;overflow-x:hidden;background:var(--bg)}
 body{
-  margin:0;background:var(--bg);color:var(--ink);
+  margin:0;min-width:0;overflow-wrap:break-word;background:var(--bg);color:var(--ink);
   font-family:var(--mono);font-size:14px;line-height:1.55;
   -webkit-font-smoothing:antialiased;
 }
@@ -52,7 +52,7 @@ table.grid{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;
 table.grid th{text-align:left;font-weight:700;color:var(--muted);
   font-size:11px;text-transform:uppercase;letter-spacing:.05em;
   padding:7px 10px;border-bottom:1px solid var(--rule-strong);white-space:nowrap}
-table.grid td{padding:7px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
+table.grid td{padding:9px 10px;overflow-wrap:anywhere;border-bottom:1px solid var(--rule);vertical-align:top}
 table.grid tr:hover td{background:var(--panel)}
 .num{text-align:right;color:var(--faint);font-variant-numeric:tabular-nums}
 .nowrap{white-space:nowrap}
@@ -110,6 +110,7 @@ table.src tr:target td.ln{background:#39310f}
 
 /* --- Diff --- */
 .filediff{border:1px solid var(--rule);border-radius:6px;margin:14px 0;overflow:hidden}
+.filediff,.meta,.readme,.code{max-width:100%}
 .filediff .fh{background:var(--panel);padding:8px 12px;font-size:12px;
   display:flex;gap:10px;align-items:center;flex-wrap:wrap;
   border-bottom:1px solid var(--rule);word-break:break-all}
@@ -135,11 +136,12 @@ tr.hsep td{background:var(--panel);color:var(--faint);padding:2px 8px;font-size:
 .meta{border:1px solid var(--rule);border-radius:6px;background:var(--bg-elev);
   padding:14px 16px;margin-bottom:8px;overflow-wrap:break-word}
 .meta .subject{font-size:15px;font-weight:700;margin-bottom:10px;font-family:var(--sans)}
-.meta dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;margin:0}
-.meta dt{color:var(--muted)}
+.meta dl{display:grid;grid-template-columns:minmax(0,1fr);gap:0;margin:0}
+.meta dt{color:var(--muted);margin-top:6px;font-size:11px;text-transform:uppercase}
 .meta dd{margin:0;word-break:break-all}
 
-.pager{margin-top:18px;display:flex;gap:14px;font-size:13px}
+.pager{margin-top:18px;display:flex;gap:14px;font-size:14px;flex-wrap:wrap}
+.pager a{padding:6px 0}
 
 footer{max-width:1080px;margin:0 auto;padding:18px 14px;color:var(--faint);
   font-size:11px;border-top:1px solid var(--rule);font-family:var(--sans)}
@@ -153,6 +155,12 @@ footer{max-width:1080px;margin:0 auto;padding:18px 14px;color:var(--faint);
   main{padding:22px 20px 60px}
   .readme{padding:22px 26px}
   table.grid{display:table}
+}
+@media (min-width:640px){
+  .meta dl{grid-template-columns:max-content minmax(0,1fr);gap:4px 14px}
+  .meta dt{margin-top:0;font-size:inherit;text-transform:none}
+  table.grid td{padding:7px 10px}
+  .pager{font-size:13px}
 }
 @media (min-width:900px){
   .meta dl{gap:3px 16px}
