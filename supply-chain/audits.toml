@@ -1,0 +1,310 @@
+
+# cargo-vet audits file
+
+[audits]
+
+[[trusted.gix]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-10"
+end = "2027-11-05"
+
+[[trusted.gix-actor]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-attributes]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-bitmap]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-chunk]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-command]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-commitgraph]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-config]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-config-value]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-date]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-diff]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-discover]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-error]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2026-01-22"
+end = "2027-11-05"
+
+[[trusted.gix-features]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-filter]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-07-01"
+end = "2027-11-05"
+
+[[trusted.gix-fs]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-04-19"
+end = "2027-11-05"
+
+[[trusted.gix-glob]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-hash]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-hashtable]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-ignore]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-04-26"
+end = "2027-11-05"
+
+[[trusted.gix-imara-diff]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2026-04-24"
+end = "2027-11-05"
+
+[[trusted.gix-index]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-lock]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-object]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-odb]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-pack]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-packetline]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-path]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-pathspec]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-08-22"
+end = "2027-11-05"
+
+[[trusted.gix-protocol]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-quote]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-ref]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-refspec]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-revision]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-revwalk]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-06-10"
+end = "2027-11-05"
+
+[[trusted.gix-sec]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-shallow]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2024-12-22"
+end = "2027-11-05"
+
+[[trusted.gix-submodule]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-08-07"
+end = "2027-11-05"
+
+[[trusted.gix-tempfile]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-trace]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-06-16"
+end = "2027-11-05"
+
+[[trusted.gix-transport]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-traverse]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-url]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-utils]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-04-19"
+end = "2027-11-05"
+
+[[trusted.gix-validate]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-worktree]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-02-17"
+end = "2027-11-05"
+
+[[trusted.gix-worktree-stream]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2023-07-22"
+end = "2027-11-05"
+
+[[trusted.libc]]
+criteria = "safe-to-deploy"
+user-id = 55123 # rust-lang-owner
+start = "2024-08-15"
+end = "2027-11-05"
+
+[[trusted.prodash]]
+criteria = "safe-to-deploy"
+user-id = 980 # Sebastian Thiel (Byron)
+start = "2020-02-16"
+end = "2027-11-05"
+
+[[trusted.rustix]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2021-10-29"
+end = "2027-11-05"
+
+[[trusted.windows-sys]]
+criteria = "safe-to-deploy"
+user-id = 64539 # Kenny Kerr (kennykerr)
+start = "2021-11-15"
+end = "2027-11-05"
