@@ -2451,7 +2451,7 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "rsgit-web"
-version = "1.3.3"
+version = "1.3.4"
 dependencies = [
  "async-h1",
  "async-lock 3.4.2",

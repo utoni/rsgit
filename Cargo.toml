@@ -1,6 +1,6 @@
 [package]
 name = "rsgit-web"
-version = "1.3.3"
+version = "1.3.4"
 edition = "2024"
 description = "rsgit: A hyper-hyperfast web frontend for git repositories written in Rust."
 repository = "https://github.com/utoni/rsgit"

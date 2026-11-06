@@ -47,8 +47,8 @@ main{max-width:1080px;margin:0 auto;padding:16px 14px 56px}
 .section-title:first-child{margin-top:2px}
 
 /* --- Tables --- */
-table.grid{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;
-  width:100%;border-collapse:collapse;font-size:13px}
+.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table.grid{width:100%;border-collapse:collapse;font-size:13px}
 table.grid th{text-align:left;font-weight:700;color:var(--muted);
   font-size:11px;text-transform:uppercase;letter-spacing:.05em;
   padding:7px 10px;border-bottom:1px solid var(--rule-strong);white-space:nowrap}
@@ -154,7 +154,6 @@ footer{max-width:1080px;margin:0 auto;padding:18px 14px;color:var(--faint);
   .tabs{padding:0 20px}
   main{padding:22px 20px 60px}
   .readme{padding:22px 26px}
-  table.grid{display:table}
 }
 @media (min-width:640px){
   .meta dl{grid-template-columns:max-content minmax(0,1fr);gap:4px 14px}

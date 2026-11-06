@@ -88,7 +88,7 @@ pub fn index(repos: &[RepoSummary], now: i64) -> Markup {
         @if repos.is_empty() {
             p .desc { "No repositories found in the scan directory." }
         } @else {
-            table .grid {
+            .table-scroll { table .grid {
                 thead { tr {
                     th { "Name" } th { "Description" } th { "Last activity" }
                 }}
@@ -111,7 +111,7 @@ pub fn index(repos: &[RepoSummary], now: i64) -> Markup {
                     "\n\t"
                 }
                 "\n"
-            }
+            } }
         }
     };
     render_html("rsgit — Repositories", None, "", body)

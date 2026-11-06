@@ -43,7 +43,7 @@ pub fn tree_page(
         "\n\t"
         (breadcrumbs(ctx, "tree", path, rev))
         "\n\t"
-        table .grid {
+        .table-scroll { table .grid {
             thead { tr { th { "Mode" } th { "Name" } th .num { "Size" } }}
             "\n\t"
             tbody {
@@ -80,7 +80,7 @@ pub fn tree_page(
                 "\n\t"
             }
             "\n"
-        }
+        } }
         @if let Some(html) = readme_html {
             .section-title { "README" }
             .readme { (PreEscaped(html)) }

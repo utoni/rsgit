@@ -22,7 +22,7 @@ pub fn log_page(
                 @for c in commits {
                     "\n\t\t"
                     tr {
-                        td .nowrap { a .mono-id href={ "/" (ctx.name) "/commit/" (c.id) } { (c.short) } }
+                        td { a .mono-id href={ "/" (ctx.name) "/commit/" (c.id) } { (c.short) } }
                         td { a href={ "/" (ctx.name) "/commit/" (c.id) } { (c.title) } }
                         td .mut { (c.author_name) }
                         td .mut title=(format_time(c.time_unix, c.time_offset)) {
