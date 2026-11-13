@@ -1,5 +1,4 @@
 use crate::git::error::{Error as GitError, Result as GitResult};
-use gix::bstr::ByteSlice;
 use std::path::Path;
 
 pub struct RepoSummary {
@@ -67,23 +66,44 @@ pub fn discover(root: &Path) -> Vec<RepoSummary> {
             .unwrap_or(&file_name)
             .to_string();
 
-        let (unix, offset, _) = match repo.head_commit() {
-            Ok(c) => {
-                let t = c.time().unwrap_or_default();
-                let title = c
-                    .message()
-                    .map(|m| m.title.to_str_lossy().trim().to_string())
-                    .unwrap_or_default();
-                (Some(t.seconds), t.offset, title)
-            }
-            Err(_) => (None, 0, String::new()),
+        let mut last_commit_unix: Option<i64> = None;
+        let mut last_commit_offset = 0;
+        let Ok(refs) = repo.references() else {
+            continue;
         };
+        let Ok(branches) = refs.local_branches() else {
+            continue;
+        };
+        for reference in branches.take(10) {
+            let Ok(mut head) = reference else {
+                continue;
+            };
+            let Ok(commit) = head.peel_to_commit() else {
+                continue;
+            };
+            let Ok(time) = commit.time() else {
+                continue;
+            };
+            last_commit_unix = match last_commit_unix {
+                Some(old_time) => {
+                    if old_time < time.seconds {
+                        last_commit_offset = time.offset;
+                        Some(time.seconds)
+                    } else {
+                        Some(old_time)
+                    }
+                },
+                None => {
+                    last_commit_offset = time.offset;
+                    Some(time.seconds)
+                }
+            };
+        }
 
         out.push(RepoSummary {
             name,
             description: read_description(&repo),
-            last_commit_unix: unix,
-            last_commit_offset: offset,
+            last_commit_unix, last_commit_offset
         });
     }
     out.sort_by(|a, b| b.last_commit_unix.cmp(&a.last_commit_unix));
