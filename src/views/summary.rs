@@ -20,7 +20,7 @@ pub fn summary(
         "\n\t"
         .section-title { "Latest commits" }
         "\n\t"
-        table .grid {
+        table .grid .log {
             thead { tr { th { "Commit" } th { "Message" } th { "Author" } th { "Date" } }}
             "\n\t"
             tbody {

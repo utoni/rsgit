@@ -15,7 +15,7 @@ pub fn log_page(
         "\n\t"
         .section-title { "Commit history" }
         "\n\t"
-        table .grid {
+        table .grid .log {
             thead { tr { th { "Commit" } th { "Message" } th { "Author" } th { "Date" } }}
             "\n\t"
             tbody {

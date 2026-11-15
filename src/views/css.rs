@@ -146,6 +146,13 @@ tr.hsep td{background:var(--panel);color:var(--faint);padding:2px 8px;font-size:
 footer{max-width:1080px;margin:0 auto;padding:18px 14px;color:var(--faint);
   font-size:11px;border-top:1px solid var(--rule);font-family:var(--sans)}
 
+/* --- Mobile: Hide commit hash or target column --- */
+@media (max-width:639px){
+  table.grid.log th:first-child,
+  table.grid.log td:first-child,
+  table.grid.refs th:nth-child(2),
+  table.grid.refs td:nth-child(2){display:none;}
+}
 /* --- Wider screens --- */
 @media (min-width:640px){
   body{font-size:13px}

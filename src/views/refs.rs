@@ -13,7 +13,7 @@ pub fn ref_table(
 ) -> Markup {
     html! {
         "\n\t"
-        table .grid {
+        table .grid .refs {
             thead { tr { th { "Name" } th { "Target" } th { "Subject" } th { "Date" } }}
             "\n\t"
             tbody {
@@ -22,7 +22,7 @@ pub fn ref_table(
                     tr {
                         td { (r.name) }
                         td { a .mono-id href={ "/" (ctx.name) "/commit/" (r.target) } { (r.short) } }
-                        td .mut { (r.subject) }
+                        td .mut { a href={ "/" (ctx.name) "/commit/" (r.target) } { (r.subject) } }
                         td .mut title=(format_time(r.time_unix, r.time_offset)) {
                             (relative(r.time_unix, now))
                         }
