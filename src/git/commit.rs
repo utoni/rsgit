@@ -30,8 +30,20 @@ pub fn commit_info(repo: &gix::Repository, id: gix::ObjectId) -> Result<CommitIn
 pub fn resolve_commit(repo: &gix::Repository, spec: Option<&str>) -> Result<gix::ObjectId> {
     match spec {
         None => {
-            let c = repo.head_commit().map_err(|_| Error::Empty)?;
-            Ok(c.id().detach())
+            let head_commit = repo.head_commit();
+            if head_commit.is_ok() {
+                let c = head_commit.map_err(|_| Error::Empty)?;
+                return Ok(c.id().detach());
+            }
+
+            let references = repo.references()?;
+            let mut branches = references.local_branches()?;
+            if let Some(branch) = branches.next() {
+                let branch = branch.map_err(|_| Error::Empty)?;
+                return Ok(branch.id().detach());
+            }
+
+            return Err(Error::NotFound);
         }
         Some(s) => {
             if let Ok(id) = gix::ObjectId::from_hex(s.as_bytes()) {

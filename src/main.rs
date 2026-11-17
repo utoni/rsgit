@@ -209,7 +209,8 @@ fn render_readme(repo: &gix::Repository, rev: Option<&str>, items: &[TreeItem]) 
         opts.insert(Options::ENABLE_FOOTNOTES);
         fn safe(u: pulldown_cmark::CowStr<'_>) -> pulldown_cmark::CowStr<'_> {
             let l = u.trim_start().to_ascii_lowercase();
-            if l.starts_with("javascript:") || l.starts_with("data:") || l.starts_with("vbscript:") {
+            if l.starts_with("javascript:") || l.starts_with("data:") || l.starts_with("vbscript:")
+            {
                 "#".into()
             } else {
                 u
@@ -217,12 +218,28 @@ fn render_readme(repo: &gix::Repository, rev: Option<&str>, items: &[TreeItem]) 
         }
         let parser = Parser::new_ext(&text, opts).map(|ev| match ev {
             Event::Html(s) | Event::InlineHtml(s) => Event::Text(s),
-            Event::Start(Tag::Link { link_type, dest_url, title, id }) => {
-                Event::Start(Tag::Link { link_type, dest_url: safe(dest_url), title, id })
-            }
-            Event::Start(Tag::Image { link_type, dest_url, title, id }) => {
-                Event::Start(Tag::Image { link_type, dest_url: safe(dest_url), title, id })
-            }
+            Event::Start(Tag::Link {
+                link_type,
+                dest_url,
+                title,
+                id,
+            }) => Event::Start(Tag::Link {
+                link_type,
+                dest_url: safe(dest_url),
+                title,
+                id,
+            }),
+            Event::Start(Tag::Image {
+                link_type,
+                dest_url,
+                title,
+                id,
+            }) => Event::Start(Tag::Image {
+                link_type,
+                dest_url: safe(dest_url),
+                title,
+                id,
+            }),
             e => e,
         });
         let mut out = String::new();

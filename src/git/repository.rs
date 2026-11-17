@@ -1,4 +1,5 @@
 use crate::git::error::{Error as GitError, Result as GitResult};
+use gix::sec::Trust;
 use std::path::Path;
 
 pub struct RepoSummary {
@@ -24,7 +25,9 @@ pub fn open(root: &Path, name: &str) -> GitResult<gix::Repository> {
     }
     for candidate in [root.join(name), root.join(format!("{name}.git"))] {
         if candidate.exists() {
-            if let Ok(repo) = gix::open(&candidate) {
+            let trust = Trust::from_path_ownership(&candidate)?;
+            if let Ok(repo) = gix::open_opts(&candidate, gix::open::Options::default().with(trust))
+            {
                 return Ok(repo);
             }
         }
@@ -92,7 +95,7 @@ pub fn discover(root: &Path) -> Vec<RepoSummary> {
                     } else {
                         Some(old_time)
                     }
-                },
+                }
                 None => {
                     last_commit_offset = time.offset;
                     Some(time.seconds)
@@ -103,7 +106,8 @@ pub fn discover(root: &Path) -> Vec<RepoSummary> {
         out.push(RepoSummary {
             name,
             description: read_description(&repo),
-            last_commit_unix, last_commit_offset
+            last_commit_unix,
+            last_commit_offset,
         });
     }
     out.sort_by(|a, b| b.last_commit_unix.cmp(&a.last_commit_unix));
