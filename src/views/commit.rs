@@ -80,7 +80,7 @@ pub fn commit_page(
                             (old) " → " a href={ "/" (ctx.name) "/blob/" (f.path) "?rev=" (info.id) } { (f.path) }
                         } @else { a href={ "/" (ctx.name) "/blob/" (f.path) "?rev=" (info.id) } { (f.path) } }
                     }
-                    @if !f.too_large && !f.binary {
+                    @if f.kind != ChangeKind::Renamed && !f.too_large && !f.binary {
                         "\n"
                         span .mut {
                             "\t" span .stat-add { "+" (f.added) } " "
@@ -88,7 +88,9 @@ pub fn commit_page(
                         }
                     }
                 } "\n"
-                @if f.binary {
+                @if f.kind == ChangeKind::Renamed {
+                    // Nothing to show here
+                } @else if f.binary {
                     p .note { "Binary file" }
                 } @else if f.too_large {
                     p .note { "File too large for inline diff" }
