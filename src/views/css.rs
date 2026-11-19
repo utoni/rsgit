@@ -154,7 +154,7 @@ footer{max-width:1080px;margin:0 auto;padding:18px 14px;color:var(--faint);
   table.grid.refs td:nth-child(2){display:none;}
 }
 /* --- Wider screens --- */
-@media (min-width:640px){
+@media (min-width:700px){
   body{font-size:13px}
   .tagline{display:block;margin-left:auto}
   .topbar .inner{padding:12px 20px;gap:14px}
