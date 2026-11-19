@@ -1,5 +1,6 @@
+use crate::http1::with_timeout;
 use crate::{AppState, git::repository::valid_repo_name};
-use futures_lite::{AsyncReadExt, AsyncWriteExt, FutureExt};
+use futures_lite::{AsyncReadExt, AsyncWriteExt};
 use http_types::{Body, Request, Response, StatusCode};
 use smol::process::Command;
 use std::path::{Path as FsPath, PathBuf};
@@ -15,18 +16,6 @@ fn status_resp(code: StatusCode, msg: &str) -> Response {
         res.set_body(msg.to_string());
     }
     res
-}
-
-async fn with_timeout<F, T>(dur: Duration, fut: F) -> Option<T>
-where
-    F: std::future::Future<Output = T>,
-{
-    let work = async move { Some(fut.await) };
-    let timer = async move {
-        smol::Timer::after(dur).await;
-        None
-    };
-    work.or(timer).await
 }
 
 pub async fn info_refs(st: &AppState, repo: &str, query: Option<&str>) -> Response {

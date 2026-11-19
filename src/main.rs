@@ -1,5 +1,6 @@
 mod git;
 mod highlight;
+mod http1;
 mod util;
 mod views;
 
@@ -113,9 +114,9 @@ async fn async_main() -> std::io::Result<()> {
 }
 
 async fn handle_conn(stream: smol::net::TcpStream, state: AppState) {
-    let _ = async_h1::accept(stream, move |req| {
+    http1::serve_connection(stream, move |req| {
         let state = state.clone();
-        async move { Ok(route(state, req).await) }
+        async move { route(state, req).await }
     })
     .await;
 }

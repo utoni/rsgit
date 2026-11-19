@@ -14,7 +14,7 @@ jemalloc = ["dep:tikv-jemallocator"]
 
 [dependencies]
 smol = "2"
-async-h1 = "2"
+httparse = "1"
 http-types = "2"
 futures-lite = "2"
 async-lock = "3"
