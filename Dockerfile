@@ -1,13 +1,13 @@
 FROM debian:bookworm-slim AS build-bookworm
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        build-essential debhelper dpkg-dev ca-certificates curl git \
+        build-essential debhelper-compat fakeroot ca-certificates curl git \
     && rm -rf /var/lib/apt/lists/* \
     && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o rustup.sh \
     && chmod +x ./rustup.sh \
     && ./rustup.sh -y
 WORKDIR /build/source
-COPY ./rsgit.service ./Cargo.toml ./Cargo.lock .
+COPY ./build_release_nightly.sh ./rsgit.service ./Cargo.toml ./Cargo.lock .
 COPY ./src ./src
 COPY ./debian ./debian
 RUN \
@@ -24,13 +24,13 @@ RUN \
 FROM debian:trixie-slim AS build-trixie
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        build-essential debhelper dpkg-dev ca-certificates curl git \
+        build-essential debhelper-compat fakeroot ca-certificates curl git \
     && rm -rf /var/lib/apt/lists/* \
     && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o rustup.sh \
     && chmod +x ./rustup.sh \
     && ./rustup.sh -y
 WORKDIR /build/source
-COPY ./rsgit.service ./Cargo.toml ./Cargo.lock .
+COPY ./build_release_nightly.sh ./rsgit.service ./Cargo.toml ./Cargo.lock .
 COPY ./src ./src
 COPY ./debian ./debian
 RUN \
