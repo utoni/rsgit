@@ -1,18 +1,159 @@
 use futures_lite::io::{
-    AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader,
+    AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader,
 };
-use http_types::headers::{CONNECTION, CONTENT_LENGTH, EXPECT, TRANSFER_ENCODING};
-use http_types::{Method, Request, Response, StatusCode, Url};
+use http::header::{
+    AsHeaderName, CONNECTION, CONTENT_LENGTH, CONTENT_TYPE, EXPECT, HeaderMap, HeaderName,
+    HeaderValue, IntoHeaderName, TRANSFER_ENCODING,
+};
+pub use http::{Method, StatusCode};
 use std::future::Future;
 use std::io;
-use std::str::FromStr;
 use std::time::Duration;
+pub use url::Url;
 
 const MAX_HEADERS: usize = 128;
 const MAX_HEAD_BYTES: usize = 8 * 1024;
 const MAX_BODY_BYTES: usize = 2 * 1024 * 1024;
 const HEAD_TIMEOUT: Duration = Duration::from_secs(30);
 const CONTINUE_RESPONSE: &[u8] = b"HTTP/1.1 100 Continue\r\n\r\n";
+
+const KNOWN_METHODS: &[&str] = &[
+    "GET",
+    "POST",
+];
+
+pub mod mime {
+    pub const HTML: &str = "text/html;charset=utf-8";
+    pub const PLAIN: &str = "text/plain;charset=utf-8";
+    pub const BYTE_STREAM: &str = "application/octet-stream";
+
+    pub fn from_extension(extension: impl AsRef<str>) -> Option<&'static str> {
+        match extension.as_ref() {
+            "html" => Some(HTML),
+            "js" | "mjs" | "jsonp" => Some("application/javascript;charset=utf-8"),
+            "json" => Some("application/json"),
+            "css" => Some("text/css;charset=utf-8"),
+            "svg" => Some("image/svg+xml"),
+            "xml" => Some("application/xml;charset=utf-8"),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Request {
+    method: Method,
+    url: Url,
+    headers: HeaderMap,
+    body: Vec<u8>,
+}
+
+impl Request {
+    pub fn method(&self) -> &Method {
+        &self.method
+    }
+
+    pub fn url(&self) -> &Url {
+        &self.url
+    }
+
+    pub fn header(&self, name: impl AsHeaderName) -> Option<&str> {
+        self.headers.get(name).map(value_str)
+    }
+
+    pub fn take_body(&mut self) -> Vec<u8> {
+        std::mem::take(&mut self.body)
+    }
+}
+
+fn value_str(v: &HeaderValue) -> &str {
+    std::str::from_utf8(v.as_bytes()).unwrap_or("")
+}
+
+enum BodyInner {
+    Bytes(Vec<u8>),
+    Reader(Box<dyn AsyncRead + Unpin + Send + 'static>),
+}
+
+pub struct Body {
+    inner: BodyInner,
+    mime: &'static str,
+}
+
+impl Body {
+    pub fn empty() -> Self {
+        Body {
+            inner: BodyInner::Bytes(Vec::new()),
+            mime: mime::BYTE_STREAM,
+        }
+    }
+
+    pub fn from_reader(reader: impl AsyncRead + Unpin + Send + 'static) -> Self {
+        Body {
+            inner: BodyInner::Reader(Box::new(reader)),
+            mime: mime::BYTE_STREAM,
+        }
+    }
+
+    pub fn len(&self) -> Option<usize> {
+        match &self.inner {
+            BodyInner::Bytes(b) => Some(b.len()),
+            BodyInner::Reader(_) => None,
+        }
+    }
+}
+
+impl From<String> for Body {
+    fn from(s: String) -> Self {
+        Body {
+            inner: BodyInner::Bytes(s.into_bytes()),
+            mime: mime::PLAIN,
+        }
+    }
+}
+
+impl From<Vec<u8>> for Body {
+    fn from(b: Vec<u8>) -> Self {
+        Body {
+            inner: BodyInner::Bytes(b),
+            mime: mime::BYTE_STREAM,
+        }
+    }
+}
+
+pub struct Response {
+    status: StatusCode,
+    headers: HeaderMap,
+    body: Body,
+}
+
+impl Response {
+    pub fn new(status: StatusCode) -> Self {
+        Response {
+            status,
+            headers: HeaderMap::new(),
+            body: Body::empty(),
+        }
+    }
+
+    pub fn insert_header(&mut self, name: impl IntoHeaderName, value: impl AsRef<str>) {
+        let value = value.as_ref();
+        assert!(value.is_ascii(), "String slice should be valid ASCII");
+        let value = HeaderValue::from_str(value).expect("header value contains control characters");
+        self.headers.insert(name, value);
+    }
+
+    pub fn set_content_type(&mut self, mime: &'static str) {
+        self.insert_header(CONTENT_TYPE, mime);
+    }
+
+    pub fn set_body(&mut self, body: impl Into<Body>) {
+        self.body = body.into();
+        if !self.headers.contains_key(CONTENT_TYPE) {
+            self.set_content_type(self.body.mime);
+        }
+    }
+}
 
 #[derive(Debug)]
 enum ReadError {
@@ -27,7 +168,16 @@ impl From<io::Error> for ReadError {
 }
 
 fn bad_request<E>(_: E) -> ReadError {
-    ReadError::Status(StatusCode::BadRequest)
+    ReadError::Status(StatusCode::BAD_REQUEST)
+}
+
+fn parse_method(m: &str) -> Option<Method> {
+    let upper = m.to_ascii_uppercase();
+    if KNOWN_METHODS.contains(&upper.as_str()) {
+        Method::from_bytes(upper.as_bytes()).ok()
+    } else {
+        None
+    }
 }
 
 pub(crate) async fn with_timeout<T>(dur: Duration, fut: impl Future<Output = T>) -> Option<T> {
@@ -80,7 +230,7 @@ where
             return if head.is_empty() {
                 Ok(None)
             } else {
-                Err(ReadError::Status(StatusCode::BadRequest))
+                Err(ReadError::Status(StatusCode::BAD_REQUEST))
             };
         }
         let blank = line == b"\r\n" || line == b"\n";
@@ -89,7 +239,9 @@ where
         }
         head.extend_from_slice(&line);
         if head.len() > MAX_HEAD_BYTES {
-            return Err(ReadError::Status(StatusCode::RequestHeaderFieldsTooLarge));
+            return Err(ReadError::Status(
+                StatusCode::REQUEST_HEADER_FIELDS_TOO_LARGE,
+            ));
         }
         if blank {
             break;
@@ -99,49 +251,52 @@ where
     let mut parsed = httparse::Request::new(&mut raw_headers);
     match parsed.parse(&head) {
         Ok(httparse::Status::Complete(_)) => {}
-        _ => return Err(ReadError::Status(StatusCode::BadRequest)),
+        _ => return Err(ReadError::Status(StatusCode::BAD_REQUEST)),
     }
-    let method = Method::from_str(
-        parsed
-            .method
-            .ok_or(ReadError::Status(StatusCode::BadRequest))?,
-    )
-    .map_err(bad_request)?;
+    let method = parsed
+        .method
+        .and_then(parse_method)
+        .ok_or(ReadError::Status(StatusCode::BAD_REQUEST))?;
     let http11 = match parsed.version {
         Some(1) => true,
         Some(0) => false,
-        _ => return Err(ReadError::Status(StatusCode::BadRequest)),
+        _ => return Err(ReadError::Status(StatusCode::BAD_REQUEST)),
     };
     let target = parsed
         .path
         .filter(|p| p.starts_with('/'))
-        .ok_or(ReadError::Status(StatusCode::BadRequest))?;
+        .ok_or(ReadError::Status(StatusCode::BAD_REQUEST))?;
     let url = Url::parse(&format!("http://localhost{target}")).map_err(bad_request)?;
-    let mut req = Request::new(method, url);
+    let mut headers = HeaderMap::new();
     for h in parsed.headers.iter() {
         let value = std::str::from_utf8(h.value).map_err(bad_request)?;
-        req.append_header(h.name, value);
+        if !value.is_ascii() {
+            return Err(ReadError::Io);
+        }
+        let name = HeaderName::from_bytes(h.name.as_bytes()).map_err(bad_request)?;
+        let value = HeaderValue::from_str(value).map_err(bad_request)?;
+        headers.append(name, value);
     }
-    let chunked = match req.header(TRANSFER_ENCODING) {
+    let chunked = match headers.get(TRANSFER_ENCODING).map(value_str) {
         Some(te) => {
-            if !te.as_str().trim().eq_ignore_ascii_case("chunked") {
-                return Err(ReadError::Status(StatusCode::BadRequest));
+            if !te.trim().eq_ignore_ascii_case("chunked") {
+                return Err(ReadError::Status(StatusCode::BAD_REQUEST));
             }
             true
         }
         None => false,
     };
-    let content_length = req
-        .header(CONTENT_LENGTH)
-        .map(|v| v.as_str().trim().parse::<usize>())
+    let content_length = headers
+        .get(CONTENT_LENGTH)
+        .map(|v| value_str(v).trim().parse::<usize>())
         .transpose()
         .map_err(bad_request)?;
     if chunked && content_length.is_some() {
-        return Err(ReadError::Status(StatusCode::BadRequest));
+        return Err(ReadError::Status(StatusCode::BAD_REQUEST));
     }
-    let connection = req
-        .header(CONNECTION)
-        .map(|v| v.as_str().to_ascii_lowercase())
+    let connection = headers
+        .get(CONNECTION)
+        .map(|v| value_str(v).to_ascii_lowercase())
         .unwrap_or_default();
     let has_token = |t: &str| connection.split(',').any(|s| s.trim() == t);
     let keep_alive = if has_token("close") {
@@ -154,11 +309,11 @@ where
     let expects_body = chunked || content_length.is_some_and(|len| len > 0);
     if expects_body {
         if content_length.is_some_and(|len| len > MAX_BODY_BYTES) {
-            return Err(ReadError::Status(StatusCode::PayloadTooLarge));
+            return Err(ReadError::Status(StatusCode::PAYLOAD_TOO_LARGE));
         }
-        if req
-            .header(EXPECT)
-            .is_some_and(|v| v.as_str().eq_ignore_ascii_case("100-continue"))
+        if headers
+            .get(EXPECT)
+            .is_some_and(|v| value_str(v).eq_ignore_ascii_case("100-continue"))
         {
             writer.write_all(CONTINUE_RESPONSE).await?;
             writer.flush().await?;
@@ -173,7 +328,12 @@ where
     } else {
         Vec::new()
     };
-    req.set_body(body);
+    let req = Request {
+        method,
+        url,
+        headers,
+        body,
+    };
     Ok(Some((req, keep_alive)))
 }
 
@@ -183,7 +343,7 @@ async fn read_line<R: AsyncBufRead + Unpin>(reader: &mut R) -> Result<Vec<u8>, R
         return Err(ReadError::Io);
     }
     if line.len() > MAX_HEAD_BYTES {
-        return Err(ReadError::Status(StatusCode::BadRequest));
+        return Err(ReadError::Status(StatusCode::BAD_REQUEST));
     }
     Ok(line)
 }
@@ -209,65 +369,70 @@ async fn read_chunked<R: AsyncBufRead + Unpin>(reader: &mut R) -> Result<Vec<u8>
             }
         }
         if body.len() + size > MAX_BODY_BYTES {
-            return Err(ReadError::Status(StatusCode::PayloadTooLarge));
+            return Err(ReadError::Status(StatusCode::PAYLOAD_TOO_LARGE));
         }
         let start = body.len();
         body.resize(start + size, 0);
         reader.read_exact(&mut body[start..]).await?;
         let crlf = read_line(reader).await?;
         if !trim_crlf(&crlf).is_empty() {
-            return Err(ReadError::Status(StatusCode::BadRequest));
+            return Err(ReadError::Status(StatusCode::BAD_REQUEST));
         }
     }
 }
 
 async fn write_response<W: AsyncWrite + Unpin>(
     w: &mut W,
-    mut res: Response,
+    res: Response,
     keep_alive: bool,
 ) -> io::Result<()> {
-    let status = res.status();
+    let status = res.status;
     let mut head = format!(
         "HTTP/1.1 {} {}\r\n",
-        u16::from(status),
-        status.canonical_reason()
-    );
-    for (name, values) in res.iter() {
-        for value in values.iter() {
-            head.push_str(&format!("{name}: {value}\r\n"));
-        }
+        status.as_u16(),
+        status.canonical_reason().unwrap_or("")
+    )
+    .into_bytes();
+    for (name, value) in res.headers.iter() {
+        head.extend_from_slice(name.as_str().as_bytes());
+        head.extend_from_slice(b": ");
+        head.extend_from_slice(value.as_bytes());
+        head.extend_from_slice(b"\r\n");
     }
-    let len = res.len();
-    match len {
-        Some(n) => head.push_str(&format!("content-length: {n}\r\n")),
-        None => head.push_str("transfer-encoding: chunked\r\n"),
+    match res.body.len() {
+        Some(n) => head.extend_from_slice(format!("content-length: {n}\r\n").as_bytes()),
+        None => head.extend_from_slice(b"transfer-encoding: chunked\r\n"),
     }
     if !keep_alive {
-        head.push_str("connection: close\r\n");
+        head.extend_from_slice(b"connection: close\r\n");
     }
-    head.push_str("\r\n");
-    w.write_all(head.as_bytes()).await?;
-    let mut body = res.take_body();
-    if len.is_some() {
-        futures_lite::io::copy(&mut body, &mut *w).await?;
-    } else {
-        let mut buf = vec![0u8; 8 * 1024];
-        loop {
-            let n = body.read(&mut buf).await?;
-            if n == 0 {
-                break;
+    head.extend_from_slice(b"\r\n");
+    w.write_all(&head).await?;
+    match res.body.inner {
+        BodyInner::Bytes(bytes) => w.write_all(&bytes).await?,
+        BodyInner::Reader(mut body) => {
+            let mut buf = vec![0u8; 8 * 1024];
+            loop {
+                let n = body.read(&mut buf).await?;
+                if n == 0 {
+                    break;
+                }
+                w.write_all(format!("{n:x}\r\n").as_bytes()).await?;
+                w.write_all(&buf[..n]).await?;
+                w.write_all(b"\r\n").await?;
             }
-            w.write_all(format!("{n:x}\r\n").as_bytes()).await?;
-            w.write_all(&buf[..n]).await?;
-            w.write_all(b"\r\n").await?;
+            w.write_all(b"0\r\n\r\n").await?;
         }
-        w.write_all(b"0\r\n\r\n").await?;
     }
     w.flush().await
 }
 
 #[cfg(test)]
 mod tests {
+    pub fn body(req: &Request) -> &[u8] {
+        &req.body
+    }
+
     use super::*;
     use futures_lite::future::block_on;
     use futures_lite::io::Cursor;
@@ -280,10 +445,15 @@ mod tests {
             Err(ReadError::Io) => panic!("unexpected io error"),
         }
     }
+    async fn serialize(res: Response, keep_alive: bool) -> String {
+        let mut out = Vec::new();
+        write_response(&mut out, res, keep_alive).await.unwrap();
+        String::from_utf8(out).unwrap()
+    }
     #[test]
     fn content_length_body_is_read() {
         block_on(async {
-            let (mut req, keep) = parse(
+            let (req, keep) = parse(
                 b"POST /r/git-upload-pack HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\n\r\nhello",
             )
             .await
@@ -291,15 +461,15 @@ mod tests {
             .unwrap();
             assert!(keep);
             assert_eq!(req.url().path(), "/r/git-upload-pack");
-            assert_eq!(req.body_bytes().await.unwrap(), b"hello");
+            assert_eq!(body(&req), b"hello");
         });
     }
     #[test]
     fn chunked_body_is_decoded() {
         block_on(async {
             let raw = b"POST /r HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nwiki\r\n5;ext=1\r\npedia\r\n0\r\nX-Trailer: y\r\n\r\n";
-            let (mut req, _) = parse(raw).await.unwrap().unwrap();
-            assert_eq!(req.body_bytes().await.unwrap(), b"wikipedia");
+            let (req, _) = parse(raw).await.unwrap().unwrap();
+            assert_eq!(body(&req), b"wikipedia");
         });
     }
     #[test]
@@ -311,15 +481,67 @@ mod tests {
                 )
                 .await
                 .unwrap_err(),
-                StatusCode::BadRequest
+                StatusCode::BAD_REQUEST
             );
             assert_eq!(
                 parse(b"GET http://evil/ HTTP/1.1\r\n\r\n")
                     .await
                     .unwrap_err(),
-                StatusCode::BadRequest
+                StatusCode::BAD_REQUEST
             );
             assert!(parse(b"").await.unwrap().is_none());
+        });
+    }
+    #[test]
+    fn methods_test() {
+        block_on(async {
+            let (req, _) = parse(b"get / HTTP/1.1\r\n\r\n").await.unwrap().unwrap();
+            assert_eq!(req.method(), Method::GET);
+            let (req, _) = parse(b"pOsT / HTTP/1.1\r\n\r\n")
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(req.method().as_str(), "POST");
+            assert_eq!(
+                parse(b"FOO / HTTP/1.1\r\n\r\n").await.unwrap_err(),
+                StatusCode::BAD_REQUEST
+            );
+        });
+    }
+    #[test]
+    fn non_ascii_header_value_drops_connection() {
+        block_on(async {
+            let raw = "GET / HTTP/1.1\r\nX-Name: \u{e4}\r\n\r\n"
+                .as_bytes()
+                .to_vec();
+            let mut reader = BufReader::new(Cursor::new(raw));
+            let mut sink = Vec::new();
+            assert!(matches!(
+                read_request(&mut reader, &mut sink).await,
+                Err(ReadError::Io)
+            ));
+        });
+    }
+    #[test]
+    fn response_format() {
+        block_on(async {
+            let mut res = Response::new(StatusCode::NOT_FOUND);
+            res.set_body("nope".to_string());
+            assert_eq!(
+                serialize(res, false).await,
+                "HTTP/1.1 404 Not Found\r\ncontent-type: text/plain;charset=utf-8\r\ncontent-length: 4\r\nconnection: close\r\n\r\nnope"
+            );
+            let res = Response::new(StatusCode::PAYLOAD_TOO_LARGE);
+            assert_eq!(
+                serialize(res, true).await,
+                "HTTP/1.1 413 Payload Too Large\r\ncontent-length: 0\r\n\r\n"
+            );
+            let mut res = Response::new(StatusCode::OK);
+            res.set_body(Body::from_reader(Cursor::new(b"abc".to_vec())));
+            assert_eq!(
+                serialize(res, true).await,
+                "HTTP/1.1 200 OK\r\ncontent-type: application/octet-stream\r\ntransfer-encoding: chunked\r\n\r\n3\r\nabc\r\n0\r\n\r\n"
+            );
         });
     }
 }

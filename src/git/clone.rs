@@ -1,7 +1,6 @@
-use crate::http1::with_timeout;
+use crate::http1::{Body, Request, Response, StatusCode, with_timeout};
 use crate::{AppState, git::repository::valid_repo_name};
 use futures_lite::{AsyncReadExt, AsyncWriteExt};
-use http_types::{Body, Request, Response, StatusCode};
 use smol::process::Command;
 use std::path::{Path as FsPath, PathBuf};
 use std::process::Stdio;
@@ -20,10 +19,10 @@ fn status_resp(code: StatusCode, msg: &str) -> Response {
 
 pub async fn info_refs(st: &AppState, repo: &str, query: Option<&str>) -> Response {
     if query_service(query).as_deref() != Some("git-upload-pack") {
-        return status_resp(StatusCode::Forbidden, "Only git-upload-pack is supported");
+        return status_resp(StatusCode::FORBIDDEN, "Only git-upload-pack is supported");
     }
     let Some(dir) = repo_dir(st.root.as_path(), repo) else {
-        return status_resp(StatusCode::NotFound, "Repository not found");
+        return status_resp(StatusCode::NOT_FOUND, "Repository not found");
     };
 
     let mut child = match Command::new("/usr/bin/git")
@@ -37,13 +36,13 @@ pub async fn info_refs(st: &AppState, repo: &str, query: Option<&str>) -> Respon
         Ok(c) => c,
         Err(e) => {
             eprintln!("Failed to spawn git: {e}");
-            return status_resp(StatusCode::InternalServerError, "");
+            return status_resp(StatusCode::INTERNAL_SERVER_ERROR, "");
         }
     };
 
     let Some(mut stdout) = child.stdout.take() else {
         eprintln!("Failed to read stdout from git executable");
-        return status_resp(StatusCode::InternalServerError, "");
+        return status_resp(StatusCode::INTERNAL_SERVER_ERROR, "");
     };
     let mut buf = Vec::new();
     let read = async { stdout.read_to_end(&mut buf).await };
@@ -52,24 +51,24 @@ pub async fn info_refs(st: &AppState, repo: &str, query: Option<&str>) -> Respon
         Some(Err(e)) => {
             eprintln!("info/refs read error: {e}");
             let _ = child.kill();
-            return status_resp(StatusCode::InternalServerError, "");
+            return status_resp(StatusCode::INTERNAL_SERVER_ERROR, "");
         }
         None => {
             eprintln!("info/refs timeout");
             let _ = child.kill();
-            return status_resp(StatusCode::InternalServerError, "");
+            return status_resp(StatusCode::INTERNAL_SERVER_ERROR, "");
         }
     }
     match child.status().await {
         Ok(s) if s.success() => {}
-        _ => return status_resp(StatusCode::InternalServerError, ""),
+        _ => return status_resp(StatusCode::INTERNAL_SERVER_ERROR, ""),
     }
 
     let mut body = pkt_line("# service=git-upload-pack\n");
     body.extend_from_slice(b"0000");
     body.extend_from_slice(&buf);
 
-    let mut res = Response::new(StatusCode::Ok);
+    let mut res = Response::new(StatusCode::OK);
     res.insert_header(
         "content-type",
         "application/x-git-upload-pack-advertisement",
@@ -81,37 +80,28 @@ pub async fn info_refs(st: &AppState, repo: &str, query: Option<&str>) -> Respon
 
 pub async fn upload_pack(st: &AppState, repo: &str, mut req: Request) -> Response {
     let Some(dir) = repo_dir(st.root.as_path(), repo) else {
-        return status_resp(StatusCode::NotFound, "Repository not found");
+        return status_resp(StatusCode::NOT_FOUND, "Repository not found");
     };
 
     let permit = match st.clone_limit.try_acquire_arc() {
         Some(p) => p,
-        None => return status_resp(StatusCode::ServiceUnavailable, "Too many clients to serve"),
+        None => return status_resp(StatusCode::SERVICE_UNAVAILABLE, "Too many clients to serve"),
     };
 
     let gzipped = req
         .header("content-encoding")
-        .map(|v| v.as_str() == "gzip")
+        .map(|v| v == "gzip")
         .unwrap_or(false);
 
-    let body = req.take_body();
-    let mut raw = Vec::new();
-    if body
-        .take(MAX_REQUEST_BYTES as u64 + 1)
-        .read_to_end(&mut raw)
-        .await
-        .is_err()
-    {
-        return status_resp(StatusCode::BadRequest, "Read error");
-    }
+    let raw = req.take_body();
     if raw.len() > MAX_REQUEST_BYTES {
-        return status_resp(StatusCode::BadRequest, "Allowed request size exceeded");
+        return status_resp(StatusCode::BAD_REQUEST, "Allowed request size exceeded");
     }
 
     let input = if gzipped {
         match gunzip(&raw) {
             Ok(d) => d,
-            Err(_) => return status_resp(StatusCode::BadRequest, ""),
+            Err(_) => return status_resp(StatusCode::BAD_REQUEST, ""),
         }
     } else {
         raw
@@ -129,13 +119,13 @@ pub async fn upload_pack(st: &AppState, repo: &str, mut req: Request) -> Respons
         Ok(c) => c,
         Err(_) => {
             eprintln!("Failed to spawn git");
-            return status_resp(StatusCode::InternalServerError, "");
+            return status_resp(StatusCode::INTERNAL_SERVER_ERROR, "");
         }
     };
 
     let (Some(mut stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) else {
         eprintln!("Could not acquire stdin and stdout from spawned git child");
-        return status_resp(StatusCode::InternalServerError, "");
+        return status_resp(StatusCode::INTERNAL_SERVER_ERROR, "");
     };
 
     smol::spawn(async move {
@@ -150,10 +140,10 @@ pub async fn upload_pack(st: &AppState, repo: &str, mut req: Request) -> Respons
     .detach();
 
     let reader = futures_lite::io::BufReader::new(stdout);
-    let mut res = Response::new(StatusCode::Ok);
+    let mut res = Response::new(StatusCode::OK);
     res.insert_header("content-type", "application/x-git-upload-pack-result");
     res.insert_header("cache-control", "no-cache");
-    res.set_body(Body::from_reader(reader, None));
+    res.set_body(Body::from_reader(reader));
     res
 }
 

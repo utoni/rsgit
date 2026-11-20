@@ -6,7 +6,7 @@ mod views;
 
 use async_lock::Semaphore;
 use futures_lite::{FutureExt, StreamExt};
-use http_types::{Method, Request, Response, StatusCode, mime};
+use http1::{Method, Request, Response, StatusCode, mime};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -122,7 +122,7 @@ async fn handle_conn(stream: smol::net::TcpStream, state: AppState) {
 }
 
 async fn route(st: AppState, req: Request) -> Response {
-    let method = req.method();
+    let method = req.method().clone();
     let query = req.url().query().map(str::to_string);
 
     let segs: Vec<String> = req
@@ -140,10 +140,10 @@ async fn route(st: AppState, req: Request) -> Response {
 
     match s.as_slice() {
         [] => index(&st).await,
-        [repo, "info", "refs"] if method == Method::Get => {
+        [repo, "info", "refs"] if method == Method::GET => {
             GitClone::info_refs(&st, repo, query.as_deref()).await
         }
-        [repo, "git-upload-pack"] if method == Method::Post => {
+        [repo, "git-upload-pack"] if method == Method::POST => {
             GitClone::upload_pack(&st, repo, req).await
         }
         [repo] => summary(&st, repo).await,
@@ -159,7 +159,7 @@ async fn route(st: AppState, req: Request) -> Response {
 }
 
 fn page(m: maud::Markup) -> Response {
-    let mut res = Response::new(StatusCode::Ok);
+    let mut res = Response::new(StatusCode::OK);
     res.set_content_type(mime::HTML);
     res.set_body(m.into_string());
     res
@@ -168,28 +168,28 @@ fn page(m: maud::Markup) -> Response {
 fn fail(code: StatusCode, msg: &str) -> Response {
     let mut res = Response::new(code);
     res.set_content_type(mime::HTML);
-    res.set_body(views::error_page(u16::from(code), msg).into_string());
+    res.set_body(views::error_page(code.as_u16(), msg).into_string());
     res
 }
 
 fn redirect(to: &str) -> Response {
-    let mut res = Response::new(StatusCode::SeeOther);
+    let mut res = Response::new(StatusCode::SEE_OTHER);
     res.insert_header("location", to);
     res
 }
 
 fn not_found() -> Response {
     fail(
-        StatusCode::NotFound,
+        StatusCode::NOT_FOUND,
         "The page you requested does not exist.",
     )
 }
 
 fn map_err(e: GitError) -> Response {
     match e {
-        GitError::NotFound => fail(StatusCode::NotFound, "Not found."),
-        GitError::Empty => fail(StatusCode::Ok, "This repository has no commits yet."),
-        GitError::Git(s) => fail(StatusCode::InternalServerError, &s),
+        GitError::NotFound => fail(StatusCode::NOT_FOUND, "Not found."),
+        GitError::Empty => fail(StatusCode::OK, "This repository has no commits yet."),
+        GitError::Git(s) => fail(StatusCode::INTERNAL_SERVER_ERROR, &s),
     }
 }
 
@@ -444,7 +444,7 @@ async fn raw(st: &AppState, repo: &str, path: &str, query: Option<&str>) -> Resp
     };
     let ctype = path
         .rsplit_once('.')
-        .and_then(|(_, e)| mime::Mime::from_extension(e.to_ascii_lowercase()))
+        .and_then(|(_, e)| mime::from_extension(e.to_ascii_lowercase()))
         .map(|m| m.to_string())
         .unwrap_or_else(|| {
             if util::looks_binary(&data) {
@@ -458,7 +458,7 @@ async fn raw(st: &AppState, repo: &str, path: &str, query: Option<&str>) -> Resp
         .next()
         .unwrap_or(path)
         .replace(['"', '\\', '\r', '\n'], "_");
-    let mut res = Response::new(StatusCode::Ok);
+    let mut res = Response::new(StatusCode::OK);
     res.insert_header("content-type", ctype);
     res.insert_header(
         "content-disposition",
