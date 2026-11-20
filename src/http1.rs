@@ -17,10 +17,7 @@ const MAX_BODY_BYTES: usize = 2 * 1024 * 1024;
 const HEAD_TIMEOUT: Duration = Duration::from_secs(30);
 const CONTINUE_RESPONSE: &[u8] = b"HTTP/1.1 100 Continue\r\n\r\n";
 
-const KNOWN_METHODS: &[&str] = &[
-    "GET",
-    "POST",
-];
+const KNOWN_METHODS: &[&str] = &["GET", "POST"];
 
 pub mod mime {
     pub const HTML: &str = "text/html;charset=utf-8";
@@ -497,10 +494,7 @@ mod tests {
         block_on(async {
             let (req, _) = parse(b"get / HTTP/1.1\r\n\r\n").await.unwrap().unwrap();
             assert_eq!(req.method(), Method::GET);
-            let (req, _) = parse(b"pOsT / HTTP/1.1\r\n\r\n")
-                .await
-                .unwrap()
-                .unwrap();
+            let (req, _) = parse(b"pOsT / HTTP/1.1\r\n\r\n").await.unwrap().unwrap();
             assert_eq!(req.method().as_str(), "POST");
             assert_eq!(
                 parse(b"FOO / HTTP/1.1\r\n\r\n").await.unwrap_err(),

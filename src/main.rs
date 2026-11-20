@@ -147,7 +147,8 @@ async fn route(st: AppState, req: Request) -> Response {
             GitClone::upload_pack(&st, repo, req).await
         }
         [repo] => summary(&st, repo).await,
-        [repo, "log"] => log(&st, repo, query.as_deref()).await,
+        [repo, "log"] => log(&st, repo, None, query.as_deref()).await,
+        [repo, "log", rest @ ..] => log(&st, repo, Some(&rest.join("/")), query.as_deref()).await,
         [repo, "refs"] => refs(&st, repo, query.as_deref()).await,
         [repo, "tree"] => tree(&st, repo, "", query.as_deref()).await,
         [repo, "tree", rest @ ..] => tree(&st, repo, &rest.join("/"), query.as_deref()).await,
@@ -291,7 +292,7 @@ async fn summary(st: &AppState, repo: &str) -> Response {
     ))
 }
 
-async fn log(st: &AppState, repo: &str, query: Option<&str>) -> Response {
+async fn log(st: &AppState, repo: &str, commit: Option<&str>, query: Option<&str>) -> Response {
     let r = match GitOpen(&st.root, repo) {
         Ok(r) => r,
         Err(e) => return map_err(e),
@@ -304,7 +305,7 @@ async fn log(st: &AppState, repo: &str, query: Option<&str>) -> Response {
 
     const PAGE: usize = 50;
     let offset = parse_offset(query);
-    let mut commits = match commit::log(&r, None, offset, PAGE + 1) {
+    let mut commits = match commit::log(&r, commit, offset, PAGE + 1) {
         Ok(c) => c,
         Err(e) => return map_err(e),
     };
