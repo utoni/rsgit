@@ -54,7 +54,7 @@ pub fn commit_page(
                 @for p in parents {
                     "\t" dt { "parent" } "\n"
                     "\t" dd { a .mono-id href={ "/" (ctx.name) "/commit/" (p) } { (p) }
-                              " (" a .mono-id href={ "/" (ctx.name) "/log/" (p) } { "log" } ")"
+                              " (" a .mono-id href={ "/" (ctx.name) "/log/" (p) } { "log" }
                               ", " a .mono-id href={ "/" (ctx.name) "/tree/?rev=" (info.id) } { "tree" } ")" } "\n"
                 }
             }
