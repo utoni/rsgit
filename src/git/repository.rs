@@ -60,7 +60,10 @@ pub fn discover(root: &Path) -> Vec<RepoSummary> {
         if !path.is_dir() {
             continue;
         }
-        let Ok(repo) = gix::open(&path) else {
+        let Ok(trust ) = Trust::from_path_ownership(path.as_path()) else {
+            continue;
+        };
+        let Ok(repo) = gix::open_opts(&path, gix::open::Options::default().with(trust)) else {
             continue;
         };
         let file_name = entry.file_name().to_string_lossy().to_string();
@@ -71,6 +74,15 @@ pub fn discover(root: &Path) -> Vec<RepoSummary> {
 
         let mut last_commit_unix: Option<i64> = None;
         let mut last_commit_offset = 0;
+        match repo.head_commit() {
+            Ok(head_commit) => {
+                if let Ok(head_commit_ts) = head_commit.time() {
+                    last_commit_unix = Some(head_commit_ts.seconds);
+                    last_commit_offset = head_commit_ts.offset;
+                }
+            }
+            Err(_) => ()
+        }
         let Ok(refs) = repo.references() else {
             continue;
         };

@@ -47,13 +47,15 @@ pub fn commit_page(
             .subject { (info.title) }
             dl { "\n"
                 "\t" dt { "commit" } dd { a .mono-id href={ "/" (ctx.name) "/tree?rev=" (info.id) } { (info.id) }
-                                          " (" a .mono-id href={ "/" (ctx.name) "/log/" (info.id) } { "log" } ")" } "\n"
+                                          " (" a .mono-id href={ "/" (ctx.name) "/log/" (info.id) } { "log" }
+                                          ", " a .mono-id href={ "/" (ctx.name) "/tree/?rev=" (info.id) } { "tree" } ")" } "\n"
                 "\t" dt { "author" } dd { (info.author_name) " <" (info.author_email) ">" } "\n"
                 "\t" dt { "date" } dd { (format_time(info.time_unix, info.time_offset)) } "\n"
                 @for p in parents {
                     "\t" dt { "parent" } "\n"
                     "\t" dd { a .mono-id href={ "/" (ctx.name) "/commit/" (p) } { (p) }
-                              " (" a .mono-id href={ "/" (ctx.name) "/log/" (p) } { "log" } ")" } "\n"
+                              " (" a .mono-id href={ "/" (ctx.name) "/log/" (p) } { "log" } ")"
+                              ", " a .mono-id href={ "/" (ctx.name) "/tree/?rev=" (info.id) } { "tree" } ")" } "\n"
                 }
             }
         }
