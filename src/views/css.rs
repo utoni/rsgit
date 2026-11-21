@@ -23,7 +23,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--oxide);outline-offs
 /* --- Top bar / wordmark --- */
 .topbar{border-top:3px solid var(--oxide);background:var(--bg-elev);
   border-bottom:1px solid var(--rule)}
-.topbar .inner{max-width:1080px;margin:0 auto;padding:10px 14px;display:flex;
+.topbar .inner{margin:0 auto;padding:10px 14px;display:flex;
   align-items:baseline;gap:10px;flex-wrap:wrap}
 .wordmark{font-weight:700;font-size:16px;letter-spacing:.02em;color:var(--ink)}
 .wordmark a{color:inherit}
@@ -33,7 +33,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--oxide);outline-offs
 .tagline{display:none;color:var(--faint);font-size:11px;font-family:var(--sans)}
 
 /* --- Tabs --- */
-.tabs{max-width:1080px;margin:0 auto;padding:0 8px;display:flex;gap:2px;
+.tabs{margin:0 auto;padding:0 8px;display:flex;gap:2px;
   border-bottom:1px solid var(--rule);overflow-x:auto;-webkit-overflow-scrolling:touch}
 .tabs::-webkit-scrollbar{height:0}
 .tabs a{padding:11px 14px;color:var(--muted);border-bottom:2px solid transparent;
@@ -41,7 +41,8 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--oxide);outline-offs
 .tabs a:hover{color:var(--ink);text-decoration:none}
 .tabs a.active{color:var(--ink);border-bottom-color:var(--oxide);font-weight:700}
 
-main{max-width:1080px;margin:0 auto;padding:16px 14px 56px}
+main{margin:0 auto;padding:16px 14px 56px}
+.repo-list{max-width:1080px;margin:0 auto}
 .section-title{font-size:12px;text-transform:uppercase;letter-spacing:.08em;
   color:var(--muted);margin:24px 0 8px;font-weight:700}
 .section-title:first-child{margin-top:2px}
@@ -143,7 +144,7 @@ tr.hsep td{background:var(--panel);color:var(--faint);padding:2px 8px;font-size:
 .pager{margin-top:18px;display:flex;gap:14px;font-size:14px;flex-wrap:wrap}
 .pager a{padding:6px 0}
 
-footer{max-width:1080px;margin:0 auto;padding:18px 14px;color:var(--faint);
+footer{margin:0 auto;padding:18px 14px;color:var(--faint);
   font-size:11px;border-top:1px solid var(--rule);font-family:var(--sans)}
 
 /* --- Mobile: Hide commit hash or target column --- */
@@ -154,7 +155,7 @@ footer{max-width:1080px;margin:0 auto;padding:18px 14px;color:var(--faint);
   table.grid.refs td:nth-child(2){display:none;}
 }
 /* --- Wider screens --- */
-@media (min-width:700px){
+@media (min-width:800px){
   body{font-size:13px}
   .tagline{display:block;margin-left:auto}
   .topbar .inner{padding:12px 20px;gap:14px}

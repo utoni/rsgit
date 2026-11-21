@@ -82,6 +82,7 @@ fn render_html(title: &str, repo: Option<&RepoCtx>, active: &str, body: Markup) 
 
 pub fn index(repos: &[RepoSummary], now: i64) -> Markup {
     let body = html! {
+        .repo-list {
         "\n\t"
         .section-title { "Repositories" }
         "\n\t"
@@ -112,6 +113,7 @@ pub fn index(repos: &[RepoSummary], now: i64) -> Markup {
                 }
                 "\n"
             } }
+        }
         }
     };
     render_html("rsgit — Repositories", None, "", body)
