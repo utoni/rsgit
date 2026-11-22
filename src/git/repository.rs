@@ -60,7 +60,7 @@ pub fn discover(root: &Path) -> Vec<RepoSummary> {
         if !path.is_dir() {
             continue;
         }
-        let Ok(trust ) = Trust::from_path_ownership(path.as_path()) else {
+        let Ok(trust) = Trust::from_path_ownership(path.as_path()) else {
             continue;
         };
         let Ok(repo) = gix::open_opts(&path, gix::open::Options::default().with(trust)) else {
@@ -81,7 +81,7 @@ pub fn discover(root: &Path) -> Vec<RepoSummary> {
                     last_commit_offset = head_commit_ts.offset;
                 }
             }
-            Err(_) => ()
+            Err(_) => (),
         }
         let Ok(refs) = repo.references() else {
             continue;

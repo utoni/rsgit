@@ -1,3 +1,4 @@
+use crate::config;
 use futures_lite::io::{
     AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader,
 };
@@ -12,11 +13,7 @@ use std::time::Duration;
 pub use url::Url;
 
 const MAX_HEADERS: usize = 128;
-const MAX_HEAD_BYTES: usize = 8 * 1024;
-const MAX_BODY_BYTES: usize = 2 * 1024 * 1024;
-const HEAD_TIMEOUT: Duration = Duration::from_secs(30);
 const CONTINUE_RESPONSE: &[u8] = b"HTTP/1.1 100 Continue\r\n\r\n";
-
 const KNOWN_METHODS: &[&str] = &["GET", "POST"];
 
 pub mod mime {
@@ -194,15 +191,19 @@ where
     let mut writer = stream.clone();
     let mut reader = BufReader::new(stream);
     loop {
-        let (req, keep_alive) =
-            match with_timeout(HEAD_TIMEOUT, read_request(&mut reader, &mut writer)).await {
-                Some(Ok(Some(parsed))) => parsed,
-                Some(Err(ReadError::Status(code))) => {
-                    let _ = write_response(&mut writer, Response::new(code), false).await;
-                    return;
-                }
-                Some(Ok(None)) | Some(Err(ReadError::Io)) | None => return,
-            };
+        let (req, keep_alive) = match with_timeout(
+            Duration::from_secs(config::config().head_timeout),
+            read_request(&mut reader, &mut writer),
+        )
+        .await
+        {
+            Some(Ok(Some(parsed))) => parsed,
+            Some(Err(ReadError::Status(code))) => {
+                let _ = write_response(&mut writer, Response::new(code), false).await;
+                return;
+            }
+            Some(Ok(None)) | Some(Err(ReadError::Io)) | None => return,
+        };
         let res = handler(req).await;
         if write_response(&mut writer, res, keep_alive).await.is_err() || !keep_alive {
             return;
@@ -235,7 +236,7 @@ where
             continue;
         }
         head.extend_from_slice(&line);
-        if head.len() > MAX_HEAD_BYTES {
+        if head.len() > config::config().max_head_bytes {
             return Err(ReadError::Status(
                 StatusCode::REQUEST_HEADER_FIELDS_TOO_LARGE,
             ));
@@ -305,7 +306,7 @@ where
     };
     let expects_body = chunked || content_length.is_some_and(|len| len > 0);
     if expects_body {
-        if content_length.is_some_and(|len| len > MAX_BODY_BYTES) {
+        if content_length.is_some_and(|len| len > config::config().max_body_bytes) {
             return Err(ReadError::Status(StatusCode::PAYLOAD_TOO_LARGE));
         }
         if headers
@@ -339,7 +340,7 @@ async fn read_line<R: AsyncBufRead + Unpin>(reader: &mut R) -> Result<Vec<u8>, R
     if reader.read_until(b'\n', &mut line).await? == 0 {
         return Err(ReadError::Io);
     }
-    if line.len() > MAX_HEAD_BYTES {
+    if line.len() > config::config().max_head_bytes {
         return Err(ReadError::Status(StatusCode::BAD_REQUEST));
     }
     Ok(line)
@@ -365,7 +366,7 @@ async fn read_chunked<R: AsyncBufRead + Unpin>(reader: &mut R) -> Result<Vec<u8>
                 }
             }
         }
-        if body.len() + size > MAX_BODY_BYTES {
+        if body.len() + size > config::config().max_body_bytes {
             return Err(ReadError::Status(StatusCode::PAYLOAD_TOO_LARGE));
         }
         let start = body.len();
@@ -463,6 +464,7 @@ mod tests {
     }
     #[test]
     fn chunked_body_is_decoded() {
+        config::init_config();
         block_on(async {
             let raw = b"POST /r HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nwiki\r\n5;ext=1\r\npedia\r\n0\r\nX-Trailer: y\r\n\r\n";
             let (req, _) = parse(raw).await.unwrap().unwrap();
