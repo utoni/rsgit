@@ -1,3 +1,4 @@
+mod config;
 mod git;
 mod highlight;
 mod http1;
@@ -44,6 +45,7 @@ static ALLOC: dhat::Alloc = dhat::Alloc;
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 fn main() -> std::io::Result<()> {
+    config::init_config();
     smol::block_on(async_main())
 }
 
@@ -55,15 +57,9 @@ async fn async_main() -> std::io::Result<()> {
         "Heap profiler active: view results on https://nnethercote.github.io/dh_view/dh_view.html"
     );
 
-    let mut args = std::env::args().skip(1);
-    let root = args
-        .next()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-    let bind = args
-        .next()
-        .or_else(|| std::env::var("RSGIT_BIND").ok())
-        .unwrap_or_else(|| "127.0.0.1:8080".to_string());
+    let cfg = config::config();
+    let root = PathBuf::from(&cfg.git_root);
+    let bind = &cfg.listen_endpoint;
 
     if !root.is_dir() {
         eprintln!("Error: scan directory '{}' does not exist.", root.display());

@@ -13,6 +13,7 @@ heap-analyse = ["dep:dhat"]
 jemalloc = ["dep:tikv-jemallocator"]
 
 [dependencies]
+argh = "0.1"
 smol = "2"
 httparse = "1"
 http = "1"
