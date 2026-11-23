@@ -6,7 +6,7 @@ Wants=network-online.target
 
 [Service]
 Type=exec
-ExecStart=/usr/bin/rsgit --git-root=/srv/git --listen-endpoint=127.0.0.1:8080
+ExecStart=/usr/bin/rsgit --git-root /srv/git --listen-endpoint 127.0.0.1:8080
 Restart=on-failure
 RestartSec=2
 DynamicUser=yes

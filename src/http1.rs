@@ -431,6 +431,7 @@ mod tests {
         &req.body
     }
 
+    use crate::config::init_config as InitConfig;
     use super::*;
     use futures_lite::future::block_on;
     use futures_lite::io::Cursor;
@@ -464,7 +465,7 @@ mod tests {
     }
     #[test]
     fn chunked_body_is_decoded() {
-        Config::init_config();
+        InitConfig();
         block_on(async {
             let raw = b"POST /r HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nwiki\r\n5;ext=1\r\npedia\r\n0\r\nX-Trailer: y\r\n\r\n";
             let (req, _) = parse(raw).await.unwrap().unwrap();
