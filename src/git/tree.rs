@@ -1,3 +1,4 @@
+use crate::config::config as Config;
 use super::{
     commit::resolve_commit,
     error::{Error, Result},
@@ -12,8 +13,6 @@ pub struct TreeItem {
     pub is_submodule: bool,
     pub size: usize,
 }
-
-const MAX_BLOB_BYTES: usize = 128 * 1024;
 
 pub enum PathContent {
     Dir(Vec<TreeItem>),
@@ -45,7 +44,7 @@ pub fn path_content(repo: &gix::Repository, spec: Option<&str>, path: &str) -> R
         match header.kind() {
             gix::object::Kind::Blob => {
                 let size = header.size() as usize;
-                if size > MAX_BLOB_BYTES {
+                if size > Config().blob_max_bytes {
                     return Ok(PathContent::File {
                         data: Vec::new(),
                         size,

@@ -299,20 +299,19 @@ async fn log(st: &AppState, repo: &str, commit: Option<&str>, query: Option<&str
         description: &desc,
     };
 
-    const PAGE: usize = 50;
     let offset = parse_offset(query);
-    let mut commits = match commit::log(&r, commit, offset, PAGE + 1) {
+    let mut commits = match commit::log(&r, commit, offset, config::config().max_log_entries_per_page + 1) {
         Ok(c) => c,
         Err(e) => return map_err(e),
     };
-    let has_more = commits.len() > PAGE;
-    commits.truncate(PAGE);
+    let has_more = commits.len() > config::config().max_log_entries_per_page;
+    commits.truncate(config::config().max_log_entries_per_page);
 
     page(views::log::log_page(
         &ctx,
         &commits,
         offset,
-        PAGE,
+        config::config().max_log_entries_per_page,
         has_more,
         now_unix(),
     ))
@@ -329,22 +328,21 @@ async fn refs(st: &AppState, repo: &str, query: Option<&str>) -> Response {
         description: &desc,
     };
 
-    const PAGE: usize = 15;
     let offset = parse_offset(query);
-    let mut refs = match git_refs(&r, offset, PAGE + 1) {
+    let mut refs = match git_refs(&r, offset, config::config().max_ref_entries_per_page + 1) {
         Ok(x) => x,
         Err(e) => return map_err(e),
     };
-    let has_more_branches = refs.branches.len() > PAGE;
-    refs.branches.truncate(PAGE);
-    let has_more_tags = refs.tags.len() > PAGE;
-    refs.tags.truncate(PAGE);
+    let has_more_branches = refs.branches.len() > config::config().max_ref_entries_per_page;
+    refs.branches.truncate(config::config().max_ref_entries_per_page);
+    let has_more_tags = refs.tags.len() > config::config().max_ref_entries_per_page;
+    refs.tags.truncate(config::config().max_ref_entries_per_page);
 
     page(views::refs::refs_page(
         &ctx,
         &refs,
         offset,
-        PAGE,
+        config::config().max_ref_entries_per_page,
         has_more_branches,
         has_more_tags,
         now_unix(),

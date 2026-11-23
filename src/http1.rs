@@ -1,4 +1,4 @@
-use crate::config;
+use crate::config::config as Config;
 use futures_lite::io::{
     AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader,
 };
@@ -192,7 +192,7 @@ where
     let mut reader = BufReader::new(stream);
     loop {
         let (req, keep_alive) = match with_timeout(
-            Duration::from_secs(config::config().head_timeout),
+            Duration::from_secs(Config().head_timeout),
             read_request(&mut reader, &mut writer),
         )
         .await
@@ -236,7 +236,7 @@ where
             continue;
         }
         head.extend_from_slice(&line);
-        if head.len() > config::config().max_head_bytes {
+        if head.len() > Config().max_head_bytes {
             return Err(ReadError::Status(
                 StatusCode::REQUEST_HEADER_FIELDS_TOO_LARGE,
             ));
@@ -306,7 +306,7 @@ where
     };
     let expects_body = chunked || content_length.is_some_and(|len| len > 0);
     if expects_body {
-        if content_length.is_some_and(|len| len > config::config().max_body_bytes) {
+        if content_length.is_some_and(|len| len > Config().max_body_bytes) {
             return Err(ReadError::Status(StatusCode::PAYLOAD_TOO_LARGE));
         }
         if headers
@@ -340,7 +340,7 @@ async fn read_line<R: AsyncBufRead + Unpin>(reader: &mut R) -> Result<Vec<u8>, R
     if reader.read_until(b'\n', &mut line).await? == 0 {
         return Err(ReadError::Io);
     }
-    if line.len() > config::config().max_head_bytes {
+    if line.len() > Config().max_head_bytes {
         return Err(ReadError::Status(StatusCode::BAD_REQUEST));
     }
     Ok(line)
@@ -366,7 +366,7 @@ async fn read_chunked<R: AsyncBufRead + Unpin>(reader: &mut R) -> Result<Vec<u8>
                 }
             }
         }
-        if body.len() + size > config::config().max_body_bytes {
+        if body.len() + size > Config().max_body_bytes {
             return Err(ReadError::Status(StatusCode::PAYLOAD_TOO_LARGE));
         }
         let start = body.len();
@@ -464,7 +464,7 @@ mod tests {
     }
     #[test]
     fn chunked_body_is_decoded() {
-        config::init_config();
+        Config::init_config();
         block_on(async {
             let raw = b"POST /r HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nwiki\r\n5;ext=1\r\npedia\r\n0\r\nX-Trailer: y\r\n\r\n";
             let (req, _) = parse(raw).await.unwrap().unwrap();

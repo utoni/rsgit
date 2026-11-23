@@ -1,13 +1,10 @@
 use crate::http1::{Body, Request, Response, StatusCode, with_timeout};
-use crate::{AppState, git::repository::valid_repo_name};
+use crate::{AppState, config::config as Config, git::repository::valid_repo_name};
 use futures_lite::{AsyncReadExt, AsyncWriteExt};
 use smol::process::Command;
 use std::path::{Path as FsPath, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
-
-const INFO_REFS_TIMEOUT: Duration = Duration::from_secs(30);
-const MAX_REQUEST_BYTES: usize = 2 * 1024 * 1024;
 
 fn status_resp(code: StatusCode, msg: &str) -> Response {
     let mut res = Response::new(code);
@@ -46,7 +43,7 @@ pub async fn info_refs(st: &AppState, repo: &str, query: Option<&str>) -> Respon
     };
     let mut buf = Vec::new();
     let read = async { stdout.read_to_end(&mut buf).await };
-    match with_timeout(INFO_REFS_TIMEOUT, read).await {
+    match with_timeout(Duration::from_secs(Config().git_clone_refs_timeout), read).await {
         Some(Ok(_)) => {}
         Some(Err(e)) => {
             eprintln!("info/refs read error: {e}");
@@ -94,7 +91,7 @@ pub async fn upload_pack(st: &AppState, repo: &str, mut req: Request) -> Respons
         .unwrap_or(false);
 
     let raw = req.take_body();
-    if raw.len() > MAX_REQUEST_BYTES {
+    if raw.len() > Config().max_body_bytes {
         return status_resp(StatusCode::BAD_REQUEST, "Allowed request size exceeded");
     }
 

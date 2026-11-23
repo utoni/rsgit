@@ -1,3 +1,4 @@
+use crate::config::config as Config;
 use super::{
     commit::{CommitInfo, commit_info, resolve_commit},
     error::Result,
@@ -35,10 +36,6 @@ pub struct FileDiff {
     pub removed: usize,
     pub hunks: Vec<Vec<DiffLine>>,
 }
-
-const MAX_DIFF_BYTES: usize = 128 * 1024;
-const MAX_TOTAL_DIFF_BYTES: u64 = 256 * 1024;
-const MAX_DIFF_FILES: usize = 64;
 
 fn blob_size(repo: &gix::Repository, id: Option<gix::ObjectId>) -> u64 {
     id.and_then(|i| repo.find_header(i).ok())
@@ -140,16 +137,16 @@ pub fn commit_diff(
 
     let mut files = Vec::new();
     let mut total: u64 = 0;
-    if raws.len() > MAX_DIFF_FILES {
+    if raws.len() > Config().diff_max_files {
         return Ok((info, parent_hex, files));
     }
     for (n, raw) in raws.into_iter().enumerate() {
         let old_size = blob_size(repo, raw.old_id);
         let new_size = blob_size(repo, raw.new_id);
-        let too_large = old_size > MAX_DIFF_BYTES as u64
-            || new_size > MAX_DIFF_BYTES as u64
-            || n >= MAX_DIFF_FILES
-            || total + old_size + new_size > MAX_TOTAL_DIFF_BYTES;
+        let too_large = old_size > Config().diff_max_bytes as u64
+            || new_size > Config().diff_max_bytes as u64
+            || n >= Config().diff_max_files
+            || total + old_size + new_size > Config().diff_max_total_bytes;
 
         let (binary, hunks, added, removed) = if too_large {
             (false, Vec::new(), 0, 0)

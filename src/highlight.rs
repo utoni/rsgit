@@ -1,4 +1,4 @@
-use crate::config;
+use crate::config::config as Config;
 use std::collections::HashMap;
 use tree_sitter_highlight::{HighlightConfiguration, HighlightEvent, Highlighter as TsCursor};
 
@@ -55,7 +55,7 @@ impl Highlighter {
         let Some(cfg) = self.configs.get(key) else {
             return escape_lines(code);
         };
-        if code.len() > config::config().max_highlight_bytes {
+        if code.len() > Config().max_highlight_bytes {
             return escape_lines(code);
         }
 

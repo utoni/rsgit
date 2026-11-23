@@ -27,6 +27,34 @@ pub struct Args {
     /// http head timeout in seconds
     #[argh(option, default = "30")]
     pub head_timeout: u64,
+
+    /// git clone read refs (from git executable) timeout
+    #[argh(option, default = "30")]
+    pub git_clone_refs_timeout: u64,
+
+    /// max bytes to diff for the highlighter (on file of a commit)
+    #[argh(option, default = "128 * 1024")]
+    pub diff_max_bytes: usize,
+
+    /// max bytes to diff for the highlighter (all files of a commit)
+    #[argh(option, default = "256 * 1024")]
+    pub diff_max_total_bytes: u64,
+
+    /// max files per commit to get processed by the highlighter
+    #[argh(option, default = "64")]
+    pub diff_max_files: usize,
+
+    /// max blob bytes for a tree item
+    #[argh(option, default = "128 * 1024")]
+    pub blob_max_bytes: usize,
+
+    /// max log entries shown per page
+    #[argh(option, default = "50")]
+    pub max_log_entries_per_page: usize,
+
+    /// max ref entries shown per page
+    #[argh(option, default = "15")]
+    pub max_ref_entries_per_page: usize,
 }
 
 static CONFIG: OnceLock<Args> = OnceLock::new();
