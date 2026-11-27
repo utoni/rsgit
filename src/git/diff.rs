@@ -1,8 +1,8 @@
-use crate::config::config as Config;
 use super::{
     commit::{CommitInfo, commit_info, resolve_commit},
     error::Result,
 };
+use crate::config::config as Config;
 use gix::bstr::ByteSlice;
 
 #[derive(PartialEq, Clone, Copy)]

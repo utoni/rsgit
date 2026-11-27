@@ -1,9 +1,10 @@
 use crate::git::error::{Error as GitError, Result as GitResult};
 use gix::sec::Trust;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub struct RepoSummary {
     pub name: String,
+    pub git_dir: PathBuf,
     pub description: String,
     pub last_commit_unix: Option<i64>,
     pub last_commit_offset: i32,
@@ -117,6 +118,7 @@ pub fn discover(root: &Path) -> Vec<RepoSummary> {
 
         out.push(RepoSummary {
             name,
+            git_dir: repo.git_dir().to_path_buf(),
             description: read_description(&repo),
             last_commit_unix,
             last_commit_offset,

@@ -1,8 +1,8 @@
-use crate::config::config as Config;
 use super::{
     commit::resolve_commit,
     error::{Error, Result},
 };
+use crate::config::config as Config;
 use gix::bstr::ByteSlice;
 
 pub struct TreeItem {

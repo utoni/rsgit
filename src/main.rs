@@ -1,3 +1,4 @@
+mod cache;
 mod config;
 mod git;
 mod highlight;
@@ -6,20 +7,20 @@ mod util;
 mod views;
 
 use async_lock::Semaphore;
+use cache::RepoListCache;
 use futures_lite::{FutureExt, StreamExt};
-use http1::{Method, Request, Response, StatusCode, mime};
-use std::path::PathBuf;
-use std::sync::Arc;
-
 use git::{
     clone as GitClone, commit,
     diff::commit_diff,
     error::Error as GitError,
     references::{Refs, refs as git_refs},
-    repository::{discover as GitDiscover, open as GitOpen},
+    repository::open as GitOpen,
     tree::{PathContent, TreeItem, find_readme, path_content, raw_blob},
 };
 use highlight::Highlighter;
+use http1::{Method, Request, Response, StatusCode, mime};
+use std::path::PathBuf;
+use std::sync::Arc;
 use views::RepoCtx;
 
 #[derive(Clone)]
@@ -27,6 +28,7 @@ pub struct AppState {
     pub root: Arc<PathBuf>,
     pub hl: Arc<Highlighter>,
     pub clone_limit: Arc<Semaphore>,
+    pub repo_list: Arc<RepoListCache>,
 }
 
 fn now_unix() -> i64 {
@@ -66,10 +68,19 @@ async fn async_main() -> std::io::Result<()> {
         std::process::exit(1);
     }
 
+    let repo_list = match RepoListCache::new(root.clone()) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Cannot watch git repository root '{}': {e}", root.display());
+            std::process::exit(1);
+        }
+    };
+
     let state = AppState {
         root: Arc::new(root.clone()),
         hl: Arc::new(Highlighter::new()),
         clone_limit: Arc::new(Semaphore::new(8)),
+        repo_list: Arc::new(repo_list),
     };
 
     let listener = match smol::net::TcpListener::bind(&bind).await {
@@ -253,7 +264,7 @@ fn render_readme(repo: &gix::Repository, rev: Option<&str>, items: &[TreeItem]) 
 }
 
 async fn index(st: &AppState) -> Response {
-    let repos = GitDiscover(&st.root);
+    let repos = st.repo_list.repos().await;
     page(views::index(&repos, now_unix()))
 }
 
@@ -300,7 +311,12 @@ async fn log(st: &AppState, repo: &str, commit: Option<&str>, query: Option<&str
     };
 
     let offset = parse_offset(query);
-    let mut commits = match commit::log(&r, commit, offset, config::config().max_log_entries_per_page + 1) {
+    let mut commits = match commit::log(
+        &r,
+        commit,
+        offset,
+        config::config().max_log_entries_per_page + 1,
+    ) {
         Ok(c) => c,
         Err(e) => return map_err(e),
     };
@@ -334,9 +350,11 @@ async fn refs(st: &AppState, repo: &str, query: Option<&str>) -> Response {
         Err(e) => return map_err(e),
     };
     let has_more_branches = refs.branches.len() > config::config().max_ref_entries_per_page;
-    refs.branches.truncate(config::config().max_ref_entries_per_page);
+    refs.branches
+        .truncate(config::config().max_ref_entries_per_page);
     let has_more_tags = refs.tags.len() > config::config().max_ref_entries_per_page;
-    refs.tags.truncate(config::config().max_ref_entries_per_page);
+    refs.tags
+        .truncate(config::config().max_ref_entries_per_page);
 
     page(views::refs::refs_page(
         &ctx,

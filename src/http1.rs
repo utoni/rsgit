@@ -431,8 +431,8 @@ mod tests {
         &req.body
     }
 
-    use crate::config::init_config as InitConfig;
     use super::*;
+    use crate::config::init_config as InitConfig;
     use futures_lite::future::block_on;
     use futures_lite::io::Cursor;
     async fn parse(raw: &[u8]) -> Result<Option<(Request, bool)>, StatusCode> {
